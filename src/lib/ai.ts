@@ -1,4 +1,6 @@
-import OpenAI from 'openai';
+import { google } from '@ai-sdk/google';
+import { generateObject } from 'ai';
+import { z } from 'zod';
 
 export interface Delta4Score {
   speed: number;
@@ -56,78 +58,64 @@ export interface AIAnalysisResponse {
   reasons?: string[];
 }
 
+// Define the structured output schema
+const opportunitySchema = z.object({
+  isOpportunity: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  opportunity: z.object({
+    title: z.string(),
+    description: z.string(),
+    currentSolution: z.string().optional(),
+    proposedSolution: z.string(),
+    marketContext: z.string().optional(),
+    implementationNotes: z.string().optional(),
+    delta4Scores: z.object({
+      speed: z.number().min(0).max(10),
+      convenience: z.number().min(0).max(10),
+      trust: z.number().min(0).max(10),
+      price: z.number().min(0).max(10),
+      status: z.number().min(0).max(10),
+      predictability: z.number().min(0).max(10),
+      uiUx: z.number().min(0).max(10),
+      easeOfUse: z.number().min(0).max(10),
+      legalFriction: z.number().min(0).max(10),
+      emotionalComfort: z.number().min(0).max(10),
+    }),
+    marketSize: z.enum(['Small', 'Medium', 'Large', 'Unknown']),
+    complexity: z.enum(['Low', 'Medium', 'High']),
+    successProbability: z.enum(['Low', 'Medium', 'High']),
+    reasoning: z.object({
+      speed: z.string(),
+      convenience: z.string(),
+      trust: z.string(),
+      price: z.string(),
+      status: z.string(),
+      predictability: z.string(),
+      uiUx: z.string(),
+      easeOfUse: z.string(),
+      legalFriction: z.string(),
+      emotionalComfort: z.string(),
+    }),
+  }).optional(),
+  reasons: z.array(z.string()).optional(),
+});
+
 export class Delta4Analyzer {
-  private openai: OpenAI;
+  private apiKey: string;
 
   constructor(apiKey: string) {
-    this.openai = new OpenAI({
-      apiKey: apiKey,
-    });
+    this.apiKey = apiKey;
   }
 
   async analyzeOpportunity(request: AIAnalysisRequest): Promise<AIAnalysisResponse> {
+    console.log(`[AI] Starting structured analysis with Vercel AI SDK and Gemini`);
+    
     try {
-      const prompt = this.buildAnalysisPrompt(request);
-      
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: this.getSystemPrompt(),
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error('No response from OpenAI');
-      }
-      
-      return this.parseAIResponse(content);
-    } catch (error) {
-      console.error('Error analyzing opportunity:', error);
-      throw error;
-    }
-  }
-
-  private buildAnalysisPrompt(request: AIAnalysisRequest): string {
-    return `
-Analyze this Reddit post for potential AI business opportunities using Kunal Shah's Delta 4 theory:
-
-**Post Details:**
-- Title: ${request.postTitle}
-- Content: ${request.postContent}
-- Subreddit: r/${request.subreddit}
-- Author: ${request.author}
-- Score: ${request.score}
-- Comments: ${request.numComments}
-
-**Task:**
-1. Determine if this post describes a genuine problem that could be solved with AI
-2. If yes, analyze the opportunity using Delta 4 scoring (0-10 scale)
-3. Provide detailed reasoning for each dimension
-4. Calculate overall viability
-
-**Focus on:**
-- Real customer pain points
-- Problems where AI can provide significant improvement
-- Business opportunities with measurable impact
-- Solutions that can achieve 4+ delta improvement
-
-Please respond with a structured JSON analysis.
-    `.trim();
-  }
-
-  private getSystemPrompt(): string {
-    return `
-You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory. 
+      const result = await generateObject({
+        model: google('gemini-1.5-flash'),
+        schema: opportunitySchema,
+        prompt: `
+You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory.
 
 **Delta 4 Theory Overview:**
 For a business to be successful, it must provide a 4+ improvement delta across key dimensions:
@@ -149,68 +137,70 @@ For a business to be successful, it must provide a 4+ improvement delta across k
 - 7-8: Major improvement
 - 9-10: Revolutionary improvement
 
-**Analysis Criteria:**
+**Reddit Post Analysis:**
+- Title: ${request.postTitle}
+- Content: ${request.postContent}
+- Subreddit: r/${request.subreddit}
+- Author: ${request.author}
+- Score: ${request.score}
+- Comments: ${request.numComments}
+
+**Task:**
+Analyze this Reddit post for potential AI business opportunities. Determine if this post describes a genuine problem that could be solved with AI, and if so, provide a complete Delta 4 analysis.
+
+**Requirements:**
 - Only identify real problems with clear customer pain
 - Focus on opportunities where AI can provide substantial value
 - Consider market size and implementation feasibility
 - Prioritize problems with existing engagement/validation
+- Provide detailed reasoning for each Delta 4 dimension
+- Overall viability threshold is 4+ average score
 
-**Response Format:**
-Return a JSON object with:
-- isOpportunity: boolean
-- confidence: number (0-1)
-- opportunity: OpportunityAnalysis object (if applicable)
-- reasons: string[] (if not an opportunity)
+If this is a viable opportunity, provide the complete analysis. If not, explain why in the reasons array.
+        `,
+        temperature: 0.3,
+      });
 
-Be thorough but concise. Focus on actionable insights.
-    `.trim();
-  }
-
-  private parseAIResponse(content: string): AIAnalysisResponse {
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in AI response');
-      }
-
-      const parsed = JSON.parse(jsonMatch[0]);
+      console.log(`[AI] Structured analysis completed successfully`);
       
-      if (!parsed.isOpportunity) {
+      // Transform the structured result to our expected format
+      if (!result.object.isOpportunity || !result.object.opportunity) {
         return {
           isOpportunity: false,
-          confidence: parsed.confidence || 0,
-          reasons: parsed.reasons || ['No significant opportunity identified'],
+          confidence: result.object.confidence,
+          reasons: result.object.reasons || ['No significant opportunity identified'],
         };
       }
 
-      const opportunity: OpportunityAnalysis = {
-        title: parsed.opportunity.title,
-        description: parsed.opportunity.description,
-        currentSolution: parsed.opportunity.currentSolution,
-        proposedSolution: parsed.opportunity.proposedSolution,
-        marketContext: parsed.opportunity.marketContext,
-        implementationNotes: parsed.opportunity.implementationNotes,
-        delta4Scores: parsed.opportunity.delta4Scores,
-        overallScore: this.calculateOverallScore(parsed.opportunity.delta4Scores),
-        viabilityThreshold: this.calculateOverallScore(parsed.opportunity.delta4Scores) >= 4,
-        marketSize: parsed.opportunity.marketSize || 'Unknown',
-        complexity: parsed.opportunity.complexity || 'Medium',
-        successProbability: parsed.opportunity.successProbability || 'Medium',
-        reasoning: parsed.opportunity.reasoning,
-      };
+      const opportunity = result.object.opportunity;
+      const overallScore = this.calculateOverallScore(opportunity.delta4Scores);
 
       return {
         isOpportunity: true,
-        confidence: parsed.confidence || 0,
-        opportunity,
+        confidence: result.object.confidence,
+        opportunity: {
+          title: opportunity.title,
+          description: opportunity.description,
+          currentSolution: opportunity.currentSolution,
+          proposedSolution: opportunity.proposedSolution,
+          marketContext: opportunity.marketContext,
+          implementationNotes: opportunity.implementationNotes,
+          delta4Scores: opportunity.delta4Scores,
+          overallScore: overallScore,
+          viabilityThreshold: overallScore >= 4,
+          marketSize: opportunity.marketSize,
+          complexity: opportunity.complexity,
+          successProbability: opportunity.successProbability,
+          reasoning: opportunity.reasoning,
+        },
       };
     } catch (error) {
-      console.error('Error parsing AI response:', error);
-      throw new Error('Failed to parse AI analysis response');
+      console.error('Error in structured AI analysis:', error);
+      throw error;
     }
   }
 
-  private calculateOverallScore(scores: any): number {
+  private calculateOverallScore(scores: Delta4Score): number {
     const weights = {
       speed: 0.15,
       convenience: 0.15,
@@ -226,7 +216,7 @@ Be thorough but concise. Focus on actionable insights.
 
     let weightedSum = 0;
     Object.entries(weights).forEach(([key, weight]) => {
-      weightedSum += (scores[key] || 0) * weight;
+      weightedSum += (scores[key as keyof Delta4Score] || 0) * weight;
     });
 
     return Math.round(weightedSum * 100) / 100;
