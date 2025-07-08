@@ -125,7 +125,7 @@ export const analyzeOpportunity = inngest.createFunction(
 
     if (analysis.isOpportunity && analysis.opportunity) {
       const opportunity = await step.run("store-opportunity", async () => {
-        const { opportunity: opp } = analysis;
+        const opp = analysis.opportunity!;
         
         return await prisma.opportunity.create({
           data: {

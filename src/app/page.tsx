@@ -9,7 +9,7 @@ export default function Home() {
             🎯 Reddit AI Opportunity Finder
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Discover validated AI business opportunities by analyzing Reddit discussions using Kunal Shah's Delta 4 theory
+            Discover validated AI business opportunities by analyzing Reddit discussions using Kunal Shah&apos;s Delta 4 theory
           </p>
         </header>
 
@@ -49,7 +49,15 @@ export default function Home() {
           <p className="text-gray-600 dark:text-gray-300 mb-4">
             Test the system by manually triggering Reddit scraping and AI analysis:
           </p>
-          <TriggerScrapingButton />
+          <div className="flex gap-4">
+            <TriggerScrapingButton />
+            <a
+              href="/opportunities"
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              🎯 View Opportunities
+            </a>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">

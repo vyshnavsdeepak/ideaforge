@@ -21,7 +21,7 @@ export function TriggerScrapingButton() {
       } else {
         setResult('❌ Failed to trigger scraping');
       }
-    } catch (error) {
+    } catch {
       setResult('❌ Error triggering scraping');
     } finally {
       setIsTriggering(false);
