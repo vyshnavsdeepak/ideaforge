@@ -29,8 +29,8 @@ export const { GET, POST, PUT } = serve({
     weekendOpportunityDiscovery,
     devModeScraper,
   ],
-  // Use signing key for production security
-  signingKey: process.env.INNGEST_SIGNING_KEY,
+  // Only use signing key if provided
+  ...(process.env.INNGEST_SIGNING_KEY && { signingKey: process.env.INNGEST_SIGNING_KEY }),
   // Set the base URL for Vercel deployments
   servePath: "/api/inngest",
   // Enable streaming for better performance

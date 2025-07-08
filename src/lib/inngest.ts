@@ -4,13 +4,11 @@ import { Inngest } from "inngest";
 export const inngest = new Inngest({ 
   id: "reddit-opportunity-finder",
   name: "Reddit AI Opportunity Finder",
-  // Enable cloud mode for production
-  eventKey: process.env.INNGEST_EVENT_KEY,
+  // Only set eventKey if provided (for cloud mode)
+  ...(process.env.INNGEST_EVENT_KEY && { eventKey: process.env.INNGEST_EVENT_KEY }),
   // Use retries with exponential backoff
   retries: {
     attempts: 3,
     backoff: "exponential",
   },
-  // Set environment
-  env: process.env.NODE_ENV === "production" ? "production" : "development",
 });
