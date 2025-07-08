@@ -1,5 +1,5 @@
 import { Badge } from './ui/Badge';
-// import { Delta4Radar } from './Delta4Radar';
+import { Delta4Radar } from './Delta4Radar';
 import { ExternalLink, TrendingUp, Users, Clock, Target } from 'lucide-react';
 
 interface OpportunityCardProps {
@@ -119,66 +119,71 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
         <div className="space-y-4">
           <div>
             <h4 className="font-semibold text-gray-900 dark:text-white mb-3">📊 Delta 4 Analysis</h4>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="flex justify-between">
-                <span>Speed:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.speed)}`}>
-                  {delta4Scores.speed}/10
-                </span>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="flex justify-center">
+                <Delta4Radar scores={delta4Scores} size={180} />
               </div>
-              <div className="flex justify-between">
-                <span>Convenience:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.convenience)}`}>
-                  {delta4Scores.convenience}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Trust:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.trust)}`}>
-                  {delta4Scores.trust}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Price:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.price)}`}>
-                  {delta4Scores.price}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Status:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.status)}`}>
-                  {delta4Scores.status}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Predictability:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.predictability)}`}>
-                  {delta4Scores.predictability}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>UI/UX:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.uiUx)}`}>
-                  {delta4Scores.uiUx}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ease of Use:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.easeOfUse)}`}>
-                  {delta4Scores.easeOfUse}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Legal Friction:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.legalFriction)}`}>
-                  {delta4Scores.legalFriction}/10
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Emotional Comfort:</span>
-                <span className={`font-semibold ${getScoreColor(delta4Scores.emotionalComfort)}`}>
-                  {delta4Scores.emotionalComfort}/10
-                </span>
+              <div className="grid grid-cols-1 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Speed:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.speed)}`}>
+                    {delta4Scores.speed}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Convenience:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.convenience)}`}>
+                    {delta4Scores.convenience}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Trust:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.trust)}`}>
+                    {delta4Scores.trust}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Price:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.price)}`}>
+                    {delta4Scores.price}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Status:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.status)}`}>
+                    {delta4Scores.status}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Predictability:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.predictability)}`}>
+                    {delta4Scores.predictability}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>UI/UX:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.uiUx)}`}>
+                    {delta4Scores.uiUx}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ease of Use:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.easeOfUse)}`}>
+                    {delta4Scores.easeOfUse}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Legal Friction:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.legalFriction)}`}>
+                    {delta4Scores.legalFriction}/10
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Emotional Comfort:</span>
+                  <span className={`font-semibold ${getScoreColor(delta4Scores.emotionalComfort)}`}>
+                    {delta4Scores.emotionalComfort}/10
+                  </span>
+                </div>
               </div>
             </div>
           </div>

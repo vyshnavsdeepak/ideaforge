@@ -1,20 +1,77 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Filter, SortAsc, SortDesc } from 'lucide-react';
 
-export function OpportunityFilters() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubreddits, setSelectedSubreddits] = useState<string[]>([]);
-  const [minScore, setMinScore] = useState(0);
-  const [sortBy, setSortBy] = useState<'score' | 'date' | 'subreddit'>('score');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+interface OpportunityFiltersProps {
+  initialSearch?: string;
+  initialSubreddit?: string;
+  initialMinScore?: number;
+  initialSortBy?: 'score' | 'date' | 'subreddit';
+  initialSortOrder?: 'asc' | 'desc';
+}
+
+export function OpportunityFilters({
+  initialSearch = '',
+  initialSubreddit = '',
+  initialMinScore = 0,
+  initialSortBy = 'score',
+  initialSortOrder = 'desc',
+}: OpportunityFiltersProps) {
+  const router = useRouter();
+  
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [selectedSubreddit, setSelectedSubreddit] = useState(initialSubreddit);
+  const [minScore, setMinScore] = useState(initialMinScore);
+  const [sortBy, setSortBy] = useState(initialSortBy);
+  const [sortOrder, setSortOrder] = useState(initialSortOrder);
 
   const subreddits = [
     'entrepreneur', 'startups', 'smallbusiness', 'business', 'accounting',
     'finance', 'investing', 'legaladvice', 'lawyers', 'medicine', 'healthcare',
     'programming', 'webdev', 'datascience', 'MachineLearning', 'artificialintelligence'
   ];
+
+  const updateURL = useCallback(() => {
+    const params = new URLSearchParams();
+    
+    if (searchTerm) params.set('search', searchTerm);
+    if (selectedSubreddit) params.set('subreddit', selectedSubreddit);
+    if (minScore > 0) params.set('minScore', minScore.toString());
+    if (sortBy !== 'score') params.set('sortBy', sortBy);
+    if (sortOrder !== 'desc') params.set('sortOrder', sortOrder);
+    
+    const queryString = params.toString();
+    router.push(`/opportunities${queryString ? `?${queryString}` : ''}`);
+  }, [searchTerm, selectedSubreddit, minScore, sortBy, sortOrder, router]);
+
+  // Debounced search update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateURL();
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm, updateURL]);
+
+  // Immediate updates for other filters
+  useEffect(() => {
+    updateURL();
+  }, [selectedSubreddit, minScore, sortBy, sortOrder, updateURL]);
+
+  const handleSubredditToggle = (subreddit: string) => {
+    setSelectedSubreddit(prev => prev === subreddit ? '' : subreddit);
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setSelectedSubreddit('');
+    setMinScore(0);
+    setSortBy('score');
+    setSortOrder('desc');
+    router.push('/opportunities');
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
@@ -23,6 +80,14 @@ export function OpportunityFilters() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Filter & Search Opportunities
         </h2>
+        {(searchTerm || selectedSubreddit || minScore > 0) && (
+          <button
+            onClick={clearAllFilters}
+            className="ml-auto text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Clear All Filters
+          </button>
+        )}
       </div>
 
       <div className="grid md:grid-cols-3 gap-4">
@@ -88,21 +153,15 @@ export function OpportunityFilters() {
 
       <div className="mt-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Subreddits
+          Filter by Subreddit
         </label>
         <div className="flex flex-wrap gap-2">
           {subreddits.map((subreddit) => (
             <button
               key={subreddit}
-              onClick={() => {
-                setSelectedSubreddits(prev => 
-                  prev.includes(subreddit) 
-                    ? prev.filter(s => s !== subreddit)
-                    : [...prev, subreddit]
-                );
-              }}
+              onClick={() => handleSubredditToggle(subreddit)}
               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                selectedSubreddits.includes(subreddit)
+                selectedSubreddit === subreddit
                   ? 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100'
                   : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
