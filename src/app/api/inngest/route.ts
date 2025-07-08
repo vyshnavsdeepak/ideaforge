@@ -13,6 +13,7 @@ import {
   devModeScraper
 } from "../../../inngest/scheduled-jobs";
 
+// Serve Inngest functions with proper configuration for Vercel
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
@@ -28,4 +29,10 @@ export const { GET, POST, PUT } = serve({
     weekendOpportunityDiscovery,
     devModeScraper,
   ],
+  // Use signing key for production security
+  signingKey: process.env.INNGEST_SIGNING_KEY,
+  // Set the base URL for Vercel deployments
+  servePath: "/api/inngest",
+  // Enable streaming for better performance
+  streaming: "allow",
 });

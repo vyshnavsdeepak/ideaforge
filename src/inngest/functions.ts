@@ -37,7 +37,7 @@ export const scrapeSubreddit = inngest.createFunction(
       
       // If we have a cursor, filter out posts we've already seen
       if (cursor) {
-        const cursorTime = cursor.lastCreatedUtc.getTime();
+        const cursorTime = new Date(cursor.lastCreatedUtc).getTime();
         const beforeCount = allPosts.length;
         
         // Sort posts by created time (newest first)
@@ -181,7 +181,7 @@ export const scrapeSubreddit = inngest.createFunction(
       await step.run("update-subreddit-cursor", async () => {
         // Find the newest post we processed
         const newestPost = posts.reduce((newest, post) => 
-          post.createdUtc.getTime() > newest.createdUtc.getTime() ? post : newest
+          new Date(post.createdUtc).getTime() > new Date(newest.createdUtc).getTime() ? post : newest
         , posts[0]);
         
         console.log(`[SCRAPE] Updating cursor for r/${subreddit} to post ${newestPost.redditId} at ${newestPost.createdUtc}`);

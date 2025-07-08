@@ -196,19 +196,24 @@ describe.skip('Deduplication System', () => {
           title: 'Duplicate Post',
           author: 'test-author',
           createdAt: new Date('2023-01-01'),
-          opportunity: { id: 'opp-1' }
+          opportunities: [
+            { opportunity: { id: 'opp-1' } }
+          ]
         },
         {
           id: 'post-2',
           title: 'Duplicate Post',
           author: 'test-author',
           createdAt: new Date('2023-01-02'),
-          opportunity: { id: 'opp-2' }
+          opportunities: [
+            { opportunity: { id: 'opp-2' } }
+          ]
         }
       ]
 
       mockPrisma.redditPost.groupBy.mockResolvedValue(duplicateGroups)
       mockPrisma.redditPost.findMany.mockResolvedValue(duplicatePosts)
+      mockPrisma.opportunitySource.deleteMany.mockResolvedValue({})
       mockPrisma.opportunity.delete.mockResolvedValue({})
       mockPrisma.redditPost.delete.mockResolvedValue({})
 
@@ -216,6 +221,11 @@ describe.skip('Deduplication System', () => {
 
       expect(result.deletedPosts).toBe(1)
       expect(result.deletedOpportunities).toBe(1)
+      
+      // Should delete source links first
+      expect(mockPrisma.opportunitySource.deleteMany).toHaveBeenCalledWith({
+        where: { opportunityId: 'opp-2' }
+      })
       
       // Should delete the second post (newer) but keep the first one
       expect(mockPrisma.redditPost.delete).toHaveBeenCalledWith({
@@ -236,7 +246,8 @@ describe.skip('Deduplication System', () => {
     test('returns comprehensive statistics', async () => {
       mockPrisma.redditPost.count
         .mockResolvedValueOnce(100) // totalPosts
-        .mockResolvedValueOnce(15) // postsWithOpportunities
+      
+      mockPrisma.opportunitySource.count.mockResolvedValue(15) // postsWithOpportunities
 
       mockPrisma.opportunity.count.mockResolvedValue(20) // totalOpportunities
 

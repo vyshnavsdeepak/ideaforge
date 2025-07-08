@@ -88,7 +88,6 @@ describe('Database Schema Integration Tests', () => {
           description: 'A test opportunity for AI development',
           proposedSolution: 'Build an AI-powered solution',
           subreddit: 'test',
-          redditPostId: redditPost.id,
           
           // Delta 4 scores
           speedScore: 7,
@@ -132,6 +131,15 @@ describe('Database Schema Integration Tests', () => {
           growthPotential: 'Exponential',
           acquisitionStrategy: 'Organic',
           scalabilityType: 'Scalable',
+          niche: 'AI Healthcare',
+          // Create source link through many-to-many relationship
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.9,
+            },
+          },
         },
       });
 
@@ -159,11 +167,11 @@ describe('Database Schema Integration Tests', () => {
       });
     });
 
-    test('should enforce unique constraint on redditPostId', async () => {
+    test('should allow multiple opportunities from same Reddit post', async () => {
       const redditPost = await prisma.redditPost.create({
         data: {
-          redditId: 'unique_reddit_for_opp',
-          title: 'Test Reddit Post',
+          redditId: 'multi_opp_reddit',
+          title: 'Test Reddit Post with Multiple Opportunities',
           subreddit: 'test',
           author: 'test_author',
           createdUtc: new Date(),
@@ -176,26 +184,44 @@ describe('Database Schema Integration Tests', () => {
           description: 'First opportunity description',
           proposedSolution: 'First solution',
           subreddit: 'test',
-          redditPostId: redditPost.id,
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.9,
+            },
+          },
         },
       });
 
-      // Should fail because redditPostId is already used
-      await expect(
-        prisma.opportunity.create({
-          data: {
-            title: 'Second Opportunity',
-            description: 'Second opportunity description',
-            proposedSolution: 'Second solution',
-            subreddit: 'test',
-            redditPostId: redditPost.id, // Same redditPostId
+      // Should succeed with many-to-many relationship
+      const opportunity2 = await prisma.opportunity.create({
+        data: {
+          title: 'Second Opportunity',
+          description: 'Second opportunity description',
+          proposedSolution: 'Second solution',
+          subreddit: 'test',
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.8,
+            },
           },
-        })
-      ).rejects.toThrow();
+        },
+      });
+
+      expect(opportunity2.id).toBeDefined();
 
       // Cleanup
+      await prisma.opportunitySource.deleteMany({
+        where: { redditPostId: redditPost.id },
+      });
       await prisma.opportunity.delete({
         where: { id: opportunity1.id },
+      });
+      await prisma.opportunity.delete({
+        where: { id: opportunity2.id },
       });
       await prisma.redditPost.delete({
         where: { id: redditPost.id },
@@ -221,7 +247,13 @@ describe('Database Schema Integration Tests', () => {
           description: 'Test opportunity',
           proposedSolution: 'Test solution',
           subreddit: 'startups',
-          redditPostId: redditPost.id,
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.9,
+            },
+          },
         },
       });
 
@@ -260,7 +292,13 @@ describe('Database Schema Integration Tests', () => {
           proposedSolution: 'Test solution',
           subreddit: 'test',
           viabilityThreshold: true,
-          redditPostId: redditPost.id,
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.9,
+            },
+          },
         },
       });
 
@@ -300,29 +338,49 @@ describe('Database Schema Integration Tests', () => {
           description: 'Test opportunity',
           proposedSolution: 'Test solution',
           subreddit: 'test',
-          redditPostId: redditPost.id,
+          redditPosts: {
+            create: {
+              redditPostId: redditPost.id,
+              sourceType: 'post',
+              confidence: 0.9,
+            },
+          },
         },
       });
 
-      // Test relationship from opportunity to redditPost
-      const opportunityWithPost = await prisma.opportunity.findUnique({
+      // Test relationship from opportunity to redditPosts
+      const opportunityWithPosts = await prisma.opportunity.findUnique({
         where: { id: opportunity.id },
-        include: { redditPost: true },
+        include: { 
+          redditPosts: {
+            include: {
+              redditPost: true,
+            },
+          },
+        },
       });
 
-      expect(opportunityWithPost?.redditPost).toBeDefined();
-      expect(opportunityWithPost?.redditPost.id).toBe(redditPost.id);
-      expect(opportunityWithPost?.redditPost.title).toBe('Test Relation Post');
+      expect(opportunityWithPosts?.redditPosts).toBeDefined();
+      expect(opportunityWithPosts?.redditPosts).toHaveLength(1);
+      expect(opportunityWithPosts?.redditPosts[0].redditPost.id).toBe(redditPost.id);
+      expect(opportunityWithPosts?.redditPosts[0].redditPost.title).toBe('Test Relation Post');
 
-      // Test relationship from redditPost to opportunity
-      const postWithOpportunity = await prisma.redditPost.findUnique({
+      // Test relationship from redditPost to opportunities through OpportunitySource
+      const postWithOpportunities = await prisma.redditPost.findUnique({
         where: { id: redditPost.id },
-        include: { opportunity: true },
+        include: { 
+          opportunitySources: {
+            include: {
+              opportunity: true,
+            },
+          },
+        },
       });
 
-      expect(postWithOpportunity?.opportunity).toBeDefined();
-      expect(postWithOpportunity?.opportunity?.id).toBe(opportunity.id);
-      expect(postWithOpportunity?.opportunity?.title).toBe('Test Relation Opportunity');
+      expect(postWithOpportunities?.opportunitySources).toBeDefined();
+      expect(postWithOpportunities?.opportunitySources).toHaveLength(1);
+      expect(postWithOpportunities?.opportunitySources[0].opportunity.id).toBe(opportunity.id);
+      expect(postWithOpportunities?.opportunitySources[0].opportunity.title).toBe('Test Relation Opportunity');
 
       // Cleanup
       await prisma.opportunity.delete({

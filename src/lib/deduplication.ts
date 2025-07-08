@@ -87,7 +87,7 @@ export async function checkOpportunityDuplication(
     return {
       isDuplicate: true,
       existingId: exactTitleMatch.id,
-      reason: 'Exact title match in same niche'
+      reason: 'Exact title match' + (niche ? ' in same niche' : '')
     };
   }
 
@@ -281,7 +281,11 @@ export async function cleanupDuplicatePosts(): Promise<{
         author: group.author
       },
       include: {
-        opportunity: true
+        opportunitySources: {
+          include: {
+            opportunity: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'asc'
@@ -292,9 +296,16 @@ export async function cleanupDuplicatePosts(): Promise<{
     const postsToDelete = posts.slice(1);
     
     for (const post of postsToDelete) {
-      if (post.opportunity) {
+      // Delete all opportunities linked to this post
+      for (const oppSource of post.opportunitySources) {
+        // First delete the source links
+        await prisma.opportunitySource.deleteMany({
+          where: { opportunityId: oppSource.opportunity.id }
+        });
+        
+        // Then delete the opportunity
         await prisma.opportunity.delete({
-          where: { id: post.opportunity.id }
+          where: { id: oppSource.opportunity.id }
         });
         deletedOpportunities++;
       }
@@ -321,13 +332,7 @@ export async function getDeduplicationStats(): Promise<{
 }> {
   const totalPosts = await prisma.redditPost.count();
   const totalOpportunities = await prisma.opportunity.count();
-  const postsWithOpportunities = await prisma.redditPost.count({
-    where: {
-      opportunity: {
-        isNot: null
-      }
-    }
-  });
+  const postsWithOpportunities = await prisma.opportunitySource.count();
 
   const subredditStats = await prisma.redditPost.groupBy({
     by: ['subreddit'],

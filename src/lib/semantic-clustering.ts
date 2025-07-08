@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { google } from '@ai-sdk/google';
-import { embed, embedMany } from 'ai';
+import { embed } from 'ai';
 
 export interface DemandSignal {
   id: string;
@@ -158,7 +158,13 @@ export class SemanticClusteringEngine {
     // Link opportunity if it exists
     if (signal.postId) {
       const opportunity = await prisma.opportunity.findFirst({
-        where: { redditPostId: signal.postId },
+        where: {
+          redditPosts: {
+            some: {
+              redditPostId: signal.postId
+            }
+          }
+        },
       });
 
       if (opportunity) {
@@ -194,7 +200,13 @@ export class SemanticClusteringEngine {
     // Link opportunity if it exists
     if (signal.postId) {
       const opportunity = await prisma.opportunity.findFirst({
-        where: { redditPostId: signal.postId },
+        where: {
+          redditPosts: {
+            some: {
+              redditPostId: signal.postId
+            }
+          }
+        },
       });
 
       if (opportunity) {
@@ -302,7 +314,7 @@ export class SemanticClusteringEngine {
     return subredditNiches[subreddit] || 'General automation';
   }
 
-  async getTopDemandClusters(limit = 20): Promise<any[]> {
+  async getTopDemandClusters(limit = 20): Promise<MarketDemandCluster[]> {
     return await prisma.marketDemandCluster.findMany({
       orderBy: { occurrenceCount: 'desc' },
       take: limit,
@@ -323,7 +335,7 @@ export class SemanticClusteringEngine {
     });
   }
 
-  async getDemandClustersByNiche(niche: string, limit = 10): Promise<any[]> {
+  async getDemandClustersByNiche(niche: string, limit = 10): Promise<MarketDemandCluster[]> {
     return await prisma.marketDemandCluster.findMany({
       where: { niche },
       orderBy: { occurrenceCount: 'desc' },
@@ -345,7 +357,7 @@ export class SemanticClusteringEngine {
     });
   }
 
-  async getTrendingDemandClusters(daysBack = 7): Promise<any[]> {
+  async getTrendingDemandClusters(daysBack = 7): Promise<MarketDemandCluster[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysBack);
 
