@@ -114,7 +114,19 @@ export function InfiniteOpportunitiesList() {
         setOpportunities(data.opportunities);
         setCurrentPage(1);
       } else {
-        setOpportunities(prev => [...prev, ...data.opportunities]);
+        setOpportunities(prev => {
+          // Create a Map to deduplicate by ID
+          const opportunityMap = new Map();
+          
+          // Add existing opportunities
+          prev.forEach(opp => opportunityMap.set(opp.id, opp));
+          
+          // Add new opportunities (will overwrite if duplicate)
+          data.opportunities.forEach(opp => opportunityMap.set(opp.id, opp));
+          
+          // Convert back to array
+          return Array.from(opportunityMap.values());
+        });
       }
 
       setHasMore(data.pagination.hasMore);
