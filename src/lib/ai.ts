@@ -32,6 +32,7 @@ export interface OpportunityCategories {
   marketType: string;
   economicLevel: string;
   industryVertical: string;
+  niche: string;
   developmentComplexity: string;
   teamSize: string;
   capitalRequirement: string;
@@ -131,6 +132,7 @@ const opportunitySchema = z.object({
       marketType: z.string(),
       economicLevel: z.string(),
       industryVertical: z.string(),
+      niche: z.string(),
       developmentComplexity: z.string(),
       teamSize: z.string(),
       capitalRequirement: z.string(),
@@ -230,6 +232,11 @@ You must categorize each opportunity across ALL dimensions. Use context clues, k
 
 **Industry Vertical:** Map to primary industry based on problem domain:
 - Healthcare, Finance, Education, E-commerce, Marketing, Legal, Real Estate, Manufacturing, Entertainment, Gaming, Productivity, etc.
+
+**Niche:** Define the specific market niche or problem area:
+- Be specific and descriptive (e.g., "AI prompt automation for content creators", "Healthcare appointment scheduling", "Legal document automation for small firms")
+- Focus on the exact problem being solved and target user group
+- Use 2-6 words that clearly identify the market segment
 
 **Development Complexity:** Assess technical requirements:
 - "Simple": Basic CRUD, simple UI, existing APIs

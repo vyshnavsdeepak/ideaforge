@@ -136,6 +136,7 @@ model Opportunity {
   marketType           String?  @default("Unknown")        // Urban, Rural, Suburban, Mixed
   economicLevel        String?  @default("Unknown")        // Developed, Developing, Mixed
   industryVertical     String?  @default("Unknown")        // Healthcare, Finance, Education, E-commerce, etc.
+  niche                String?  @default("Unknown")        // Specific market niche (e.g., "AI prompt automation", "healthcare scheduling", etc.)
   developmentComplexity String? @default("Unknown")        // Simple, Medium, Complex
   teamSize             String?  @default("Unknown")        // Solo, Small Team, Large Team
   capitalRequirement   String?  @default("Unknown")        // Low, Medium, High
@@ -156,6 +157,9 @@ model Opportunity {
   
   // User interactions
   favoriteByUsers      UserFavorite[]
+  
+  // Market demand clustering
+  marketDemandClusters MarketDemandOpportunity[]
 
   @@index([subreddit])
   @@index([overallScore])
@@ -164,6 +168,44 @@ model Opportunity {
   @@index([title])
   @@index([description])
   @@index([proposedSolution])
+  @@index([businessType])
+  @@index([industryVertical])
+  @@index([niche])
+}
+
+model MarketDemandCluster {
+  id                   String   @id @default(cuid())
+  niche                String   // The specific niche/problem area
+  demandSignal         String   @db.Text // The common request pattern
+  embedding            Float[]  // Text embedding for similarity search
+  occurrenceCount      Int      @default(1) // How many times this pattern appears
+  subreddits           String[] // Which subreddits this appears in
+  lastSeen             DateTime @default(now())
+  
+  // Related opportunities
+  opportunities        MarketDemandOpportunity[]
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([niche])
+  @@index([occurrenceCount])
+  @@index([lastSeen])
+  @@unique([niche, demandSignal])
+}
+
+model MarketDemandOpportunity {
+  id                   String   @id @default(cuid())
+  clusterId            String
+  opportunityId        String
+  
+  cluster              MarketDemandCluster @relation(fields: [clusterId], references: [id])
+  opportunity          Opportunity @relation(fields: [opportunityId], references: [id])
+  
+  createdAt            DateTime @default(now())
+  
+  @@unique([clusterId, opportunityId])
 }
 
 model UserFavorite {

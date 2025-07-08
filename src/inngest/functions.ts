@@ -7,6 +7,7 @@ import {
   checkOpportunityDuplication, 
   updateRedditPost 
 } from "../lib/deduplication";
+import { clusteringEngine } from "../lib/semantic-clustering";
 
 export const scrapeSubreddit = inngest.createFunction(
   { 
@@ -278,6 +279,7 @@ export const analyzeOpportunity = inngest.createFunction(
             marketType: opp.categories.marketType,
             economicLevel: opp.categories.economicLevel,
             industryVertical: opp.categories.industryVertical,
+            niche: opp.categories.niche,
             developmentComplexity: opp.categories.developmentComplexity,
             teamSize: opp.categories.teamSize,
             capitalRequirement: opp.categories.capitalRequirement,
@@ -299,6 +301,30 @@ export const analyzeOpportunity = inngest.createFunction(
           where: { id: postId },
           data: { processedAt: new Date() }
         });
+      });
+
+      // Extract and process demand signals
+      await step.run("extract-demand-signals", async () => {
+        const signals = await clusteringEngine.extractDemandSignals(
+          postTitle,
+          postContent,
+          subreddit,
+          postId,
+          author,
+          score
+        );
+
+        console.log(`[AI] Extracted ${signals.length} demand signals from post`);
+
+        // Process each signal
+        for (const signal of signals) {
+          try {
+            const result = await clusteringEngine.processNewSignal(signal);
+            console.log(`[AI] Processed demand signal: ${result.isNewCluster ? 'New cluster' : 'Added to existing cluster'}`);
+          } catch (error) {
+            console.error(`[AI] Error processing demand signal:`, error);
+          }
+        }
       });
 
       return { 

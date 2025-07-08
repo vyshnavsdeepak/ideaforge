@@ -60,6 +60,12 @@ export default function Home() {
             >
               🎯 View Opportunities
             </a>
+            <a
+              href="/market-demand"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              📊 Market Demand
+            </a>
           </div>
         </div>
 
