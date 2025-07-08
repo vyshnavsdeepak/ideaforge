@@ -1,5 +1,3 @@
-import { TriggerScrapingButton } from "../components/TriggerScrapingButton";
-
 export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -47,10 +45,15 @@ export default function Home() {
             Quick Start
           </h2>
           <p className="text-gray-600 dark:text-gray-300 mb-4">
-            Test the system by manually triggering Reddit scraping and AI analysis:
+            Access the admin dashboard to manage scraping and view discovered opportunities:
           </p>
           <div className="flex gap-4">
-            <TriggerScrapingButton />
+            <a
+              href="/dashboard"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              🔐 Admin Dashboard
+            </a>
             <a
               href="/opportunities"
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
@@ -78,8 +81,8 @@ export default function Home() {
               <span className="text-green-600 dark:text-green-400">●</span>
             </div>
             <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded">
-              <span className="text-gray-700 dark:text-gray-300">OpenAI</span>
-              <span className="text-yellow-600 dark:text-yellow-400">●</span>
+              <span className="text-gray-700 dark:text-gray-300">Gemini AI</span>
+              <span className="text-green-600 dark:text-green-400">●</span>
             </div>
           </div>
         </div>

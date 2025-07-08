@@ -7,13 +7,13 @@ export const scrapeSubreddit = inngest.createFunction(
   { id: "scrape-subreddit" },
   { event: "reddit/scrape.subreddit" },
   async ({ event, step }) => {
-    const { subreddit, limit = 25 } = event.data;
-    console.log(`[SCRAPE] Starting scrape for r/${subreddit} with limit ${limit}`);
+    const { subreddit, limit = 25, sort = 'hot', priority = 'normal' } = event.data;
+    console.log(`[SCRAPE] Starting scrape for r/${subreddit} with limit ${limit}, sort ${sort}, priority ${priority}`);
 
     const posts = await step.run("fetch-reddit-posts", async () => {
-      console.log(`[SCRAPE] Fetching posts from r/${subreddit}`);
+      console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
       const client = new RedditClient();
-      const result = await client.fetchSubredditPosts(subreddit, "hot", limit);
+      const result = await client.fetchSubredditPosts(subreddit, sort, limit);
       console.log(`[SCRAPE] Fetched ${result.length} posts from r/${subreddit}`);
       return result;
     });
