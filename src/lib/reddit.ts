@@ -61,6 +61,7 @@ export const TARGET_SUBREDDITS = [
   'datascience',
   'MachineLearning',
   'artificialintelligence',
+  'PromptEngineering',
 ];
 
 export class RedditClient {

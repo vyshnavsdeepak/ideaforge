@@ -29,7 +29,7 @@ function buildWhereClause(params: Record<string, unknown>) {
     whereClause.subreddit = subreddit;
   }
 
-  if (minScore > 0) {
+  if (typeof minScore === 'number' && minScore > 0) {
     whereClause.overallScore = { gte: minScore };
   }
 
@@ -128,10 +128,11 @@ describe('API Logic Tests', () => {
       const params = { search: 'healthcare' };
       const whereClause = buildWhereClause(params);
 
-      expect(whereClause.OR).toHaveLength(3);
-      expect(whereClause.OR[0]).toEqual({ title: { contains: 'healthcare', mode: 'insensitive' } });
-      expect(whereClause.OR[1]).toEqual({ description: { contains: 'healthcare', mode: 'insensitive' } });
-      expect(whereClause.OR[2]).toEqual({ proposedSolution: { contains: 'healthcare', mode: 'insensitive' } });
+      expect(Array.isArray(whereClause.OR)).toBe(true);
+      expect((whereClause.OR as unknown[]).length).toBe(3);
+      expect((whereClause.OR as unknown[])[0]).toEqual({ title: { contains: 'healthcare', mode: 'insensitive' } });
+      expect((whereClause.OR as unknown[])[1]).toEqual({ description: { contains: 'healthcare', mode: 'insensitive' } });
+      expect((whereClause.OR as unknown[])[2]).toEqual({ proposedSolution: { contains: 'healthcare', mode: 'insensitive' } });
     });
 
     test('should build correct where clause for subreddit', () => {
@@ -156,7 +157,8 @@ describe('API Logic Tests', () => {
       };
       const whereClause = buildWhereClause(params);
 
-      expect(whereClause.OR).toHaveLength(3);
+      expect(Array.isArray(whereClause.OR)).toBe(true);
+      expect((whereClause.OR as unknown[]).length).toBe(3);
       expect(whereClause.subreddit).toBe('startups');
       expect(whereClause.overallScore).toEqual({ gte: 6.0 });
     });

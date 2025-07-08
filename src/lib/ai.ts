@@ -249,6 +249,10 @@ You must categorize each opportunity across ALL dimensions. Use context clues, k
 
 Use scoring-based logic: analyze keywords, context, and business patterns to make intelligent categorization decisions.
 
+**Subreddit-Specific Analysis Patterns:**
+
+${this.getSubredditSpecificPrompt(request.subreddit)}
+
 **Task:**
 Analyze this Reddit post for potential AI business opportunities. Determine if this post describes a genuine problem that could be solved with AI, and if so, provide a complete Delta 4 analysis AND comprehensive categorization.
 
@@ -326,5 +330,241 @@ If this is a viable opportunity, provide the complete analysis with full categor
     });
 
     return Math.round(weightedSum * 100) / 100;
+  }
+
+  private getSubredditSpecificPrompt(subreddit: string): string {
+    const subredditPrompts: Record<string, string> = {
+      'PromptEngineering': `
+**r/PromptEngineering Analysis:**
+Look for these specific startup opportunity patterns:
+
+1. **Pain Point Indicators:**
+   - "How do I prompt ChatGPT to...?"
+   - "Looking for a better way to..."
+   - "Anyone found a prompt for X?"
+   - "What's the best way to automate Y?"
+   - "Prompt for [use case]?"
+
+2. **Productization Opportunities:**
+   - Repeated manual prompting tasks that could be automated
+   - Complex prompt workflows that could be simplified
+   - Industry-specific prompt needs that could be packaged
+   - Prompt versioning/testing problems
+   - Multi-LLM compatibility issues
+
+3. **Common Categories:**
+   - **Content Generation**: Blogs, emails, SEO content, scripts
+   - **Code Prompting**: Regex, SQL, debugging, script generation
+   - **Agents/Automation**: Reports, workflows, scheduled tasks
+   - **Education**: Teaching prompts, quizzing, explanations
+   - **Compliance/Legal**: Contracts, policies, documentation
+   - **Enterprise Workflows**: SOPs, meeting notes, communication
+
+4. **Evaluation Criteria:**
+   - Can this be **productized** into a repeatable service?
+   - Can we **solve it 4x better** than manual prompting?
+   - Is this a **repeated use case** worth automating?
+   - Are people **hacking around** limitations that we could fix?
+      `,
+      
+      'startups': `
+**r/startups Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How to validate..."
+   - "Struggling with..."
+   - "Need help with..."
+   - "Looking for co-founder for..."
+   - "Built X but having trouble with Y"
+
+2. **Opportunity Types:**
+   - Validation problems (market research, user feedback)
+   - Operational inefficiencies (hiring, accounting, legal)
+   - Growth bottlenecks (marketing, sales, customer acquisition)
+   - Technical challenges (scaling, infrastructure, integrations)
+
+3. **Common Categories:**
+   - **B2B SaaS**: Tools for other startups/businesses
+   - **Marketplaces**: Connecting buyers and sellers
+   - **Productivity**: Workflow and efficiency tools
+   - **Analytics**: Data and insights platforms
+      `,
+      
+      'entrepreneur': `
+**r/entrepreneur Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How do I start..."
+   - "What's the best way to..."
+   - "I'm having trouble with..."
+   - "Looking for advice on..."
+   - "Has anyone tried..."
+
+2. **Opportunity Types:**
+   - Business process automation
+   - Market research and validation tools
+   - Financial management and accounting
+   - Customer relationship management
+   - Legal and compliance automation
+
+3. **Common Categories:**
+   - **Service Business**: Professional services that can be systematized
+   - **B2B Tools**: Software to help other entrepreneurs
+   - **Educational**: Training and courses
+   - **Marketplace**: Connecting service providers with customers
+      `,
+      
+      'programming': `
+**r/programming Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How to debug..."
+   - "Best practices for..."
+   - "Tool recommendations for..."
+   - "Struggling with..."
+   - "Anyone know a good way to..."
+
+2. **Opportunity Types:**
+   - Development workflow improvements
+   - Code quality and testing tools
+   - Documentation and knowledge sharing
+   - Deployment and infrastructure automation
+   - Learning and skill development
+
+3. **Common Categories:**
+   - **Developer Tools**: IDEs, debugging, profiling
+   - **DevOps**: CI/CD, monitoring, deployment
+   - **Education**: Learning platforms, tutorials
+   - **Productivity**: Code generation, automation
+      `,
+      
+      'webdev': `
+**r/webdev Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How do I build..."
+   - "Best framework for..."
+   - "Performance issues with..."
+   - "Client wants..."
+   - "Struggling with responsive..."
+
+2. **Opportunity Types:**
+   - Website building and hosting solutions
+   - Performance optimization tools
+   - Client management systems
+   - Design and UX tools
+   - E-commerce and payment solutions
+
+3. **Common Categories:**
+   - **SaaS Platforms**: Website builders, CMS systems
+   - **Developer Tools**: Frameworks, libraries, testing
+   - **Client Services**: Agency tools, project management
+   - **Performance**: Optimization, monitoring, analytics
+      `,
+      
+      'smallbusiness': `
+**r/smallbusiness Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How to manage..."
+   - "Best software for..."
+   - "Struggling with cash flow..."
+   - "Need help with marketing..."
+   - "Looking for affordable..."
+
+2. **Opportunity Types:**
+   - Financial management and accounting
+   - Customer relationship management
+   - Inventory and supply chain
+   - Marketing and social media
+   - HR and payroll systems
+
+3. **Common Categories:**
+   - **Business Tools**: Accounting, CRM, inventory
+   - **Marketing**: Social media, email, advertising
+   - **Operations**: POS systems, scheduling, logistics
+   - **Financial**: Payments, lending, insurance
+      `,
+      
+      'legaladvice': `
+**r/legaladvice Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "Do I need a lawyer for..."
+   - "What are my rights..."
+   - "How to file..."
+   - "Is this legal..."
+   - "Contract question..."
+
+2. **Opportunity Types:**
+   - Legal document automation
+   - Self-service legal guidance
+   - Lawyer matching and discovery
+   - Compliance monitoring tools
+   - Legal research platforms
+
+3. **Common Categories:**
+   - **LegalTech**: Document automation, e-discovery
+   - **Compliance**: Regulatory monitoring, reporting
+   - **Consumer Tools**: DIY legal forms, guidance
+   - **B2B Legal**: Contract management, IP protection
+      `,
+      
+      'healthcare': `
+**r/healthcare Analysis:**
+Look for these specific patterns:
+
+1. **Pain Point Indicators:**
+   - "How to improve patient..."
+   - "EHR system issues..."
+   - "Billing and coding..."
+   - "Staff scheduling..."
+   - "Compliance with..."
+
+2. **Opportunity Types:**
+   - Electronic health records optimization
+   - Patient communication and engagement
+   - Medical billing and coding
+   - Healthcare analytics and reporting
+   - Telemedicine and remote care
+
+3. **Common Categories:**
+   - **HealthTech**: EHR, telemedicine, diagnostics
+   - **Operations**: Scheduling, billing, compliance
+   - **Patient Care**: Communication, monitoring, engagement
+   - **Analytics**: Population health, outcomes measurement
+      `
+    };
+
+    return subredditPrompts[subreddit] || `
+**General Analysis:**
+Look for clear problem statements, user pain points, and opportunities where AI/automation could provide significant value. Focus on:
+
+1. **Pain Point Indicators:**
+   - "How do I..."
+   - "Struggling with..."
+   - "Need help with..."
+   - "Looking for better way to..."
+   - "Anyone know how to..."
+
+2. **Opportunity Types:**
+   - Process automation possibilities
+   - Information management problems
+   - Communication and collaboration issues
+   - Decision-making bottlenecks
+   - Repetitive task automation
+
+3. **Evaluation Criteria:**
+   - Clear user demand and engagement
+   - Potential for 4x improvement over current solutions
+   - Scalable and repeatable problem
+   - Technology feasibility
+    `;
   }
 }
