@@ -33,7 +33,7 @@ export const scrapeSubreddit = inngest.createFunction(
     const posts = await step.run("fetch-reddit-posts", async () => {
       console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
       const client = new RedditClient();
-      let allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
+      const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
       
       // If we have a cursor, filter out posts we've already seen
       if (cursor) {

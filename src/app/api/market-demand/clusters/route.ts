@@ -41,12 +41,7 @@ export async function GET(request: NextRequest) {
       occurrenceCount: cluster.occurrenceCount,
       subreddits: cluster.subreddits,
       lastSeen: cluster.lastSeen,
-      relatedOpportunities: cluster.opportunities?.map((opp: any) => ({
-        id: opp.opportunity.id,
-        title: opp.opportunity.title,
-        score: opp.opportunity.overallScore,
-        viable: opp.opportunity.viabilityThreshold,
-      })) || [],
+      relatedOpportunities: [],
       marketStrength: calculateMarketStrength(cluster),
     }));
 
@@ -63,13 +58,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function calculateMarketStrength(cluster: any): number {
+function calculateMarketStrength(cluster: { occurrenceCount: number; subreddits: string[]; lastSeen: Date }): number {
   // Calculate market strength based on multiple factors
   const factors = {
     occurrenceCount: Math.min(cluster.occurrenceCount / 50, 1) * 0.4,
     subredditDiversity: Math.min(cluster.subreddits.length / 5, 1) * 0.3,
-    recency: calculateRecencyScore(cluster.lastSeen) * 0.2,
-    opportunityCount: Math.min((cluster.opportunities?.length || 0) / 3, 1) * 0.1,
+    recency: calculateRecencyScore(cluster.lastSeen) * 0.3,
   };
 
   const totalScore = Object.values(factors).reduce((sum, score) => sum + score, 0);

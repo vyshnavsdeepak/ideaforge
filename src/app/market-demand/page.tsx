@@ -6,7 +6,6 @@ import {
   Users, 
   Layers, 
   Search,
-  Filter,
   BarChart3,
   Zap,
   Target,
@@ -36,10 +35,6 @@ export default function MarketDemandPage() {
   const [viewMode, setViewMode] = useState<'all' | 'trending'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    fetchClusters();
-  }, [selectedNiche, viewMode]);
-
   const fetchClusters = async () => {
     setLoading(true);
     try {
@@ -58,6 +53,11 @@ export default function MarketDemandPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchClusters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNiche, viewMode]);
 
   const getMarketStrengthColor = (strength: number) => {
     if (strength >= 80) return 'text-green-600 bg-green-50';
@@ -232,7 +232,7 @@ export default function MarketDemandPage() {
                         </span>
                       </div>
                       <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">
-                        "{cluster.demandSignal}"
+                        &ldquo;{cluster.demandSignal}&rdquo;
                       </h3>
                     </div>
                   </div>

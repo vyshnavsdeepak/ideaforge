@@ -377,9 +377,13 @@ export function InfiniteOpportunitiesList() {
               </button>
             </div>
             <FilterPanel
-              filters={currentFilters}
+              filters={{
+                ...currentFilters,
+                sortBy: currentFilters.sortBy as string,
+                sortOrder: currentFilters.sortOrder as string,
+              }}
               filterOptions={filterOptions}
-              onFilterChange={updateFilters}
+              onFilterChange={(filters) => updateFilters(filters as Partial<typeof currentFilters>)}
             />
           </div>
         )}

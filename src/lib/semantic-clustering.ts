@@ -1,6 +1,7 @@
 import { prisma } from './prisma';
 import { google } from '@ai-sdk/google';
 import { embed } from 'ai';
+import type { MarketDemandCluster } from '@prisma/client';
 
 export interface DemandSignal {
   id: string;
