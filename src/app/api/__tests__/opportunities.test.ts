@@ -12,7 +12,7 @@ jest.mock('../../../lib/prisma', () => ({
   },
 }));
 
-const mockPrisma = prisma as {
+const mockPrisma = prisma as unknown as {
   opportunity: {
     count: jest.MockedFunction<() => Promise<number>>;
     findMany: jest.MockedFunction<() => Promise<unknown[]>>;
@@ -283,7 +283,7 @@ describe('/api/opportunities', () => {
       // Verify sorting parameters
       expect(mockPrisma.opportunity.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          orderBy: { overallScore: 'desc' },
+          orderBy: [{ overallScore: 'desc' }, { sourceCount: 'desc' }],
         })
       );
     });

@@ -10,13 +10,32 @@ process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 // Mock fetch globally
 global.fetch = jest.fn()
 
-// Mock Next.js Request and Response for API testing
+// Mock Next.js Request for API testing
 global.Request = class MockRequest {
   constructor(url, options = {}) {
-    this.url = url;
+    const parsedUrl = new URL(url);
     this.method = options.method || 'GET';
-    this.headers = new Map(Object.entries(options.headers || {}));
+    this.headers = new Headers(options.headers || {});
     this.body = options.body;
+    
+    // Make url a getter to match NextRequest
+    Object.defineProperty(this, 'url', {
+      get: () => url,
+      enumerable: true,
+      configurable: true
+    });
+    
+    // Make nextUrl a getter to match NextRequest
+    Object.defineProperty(this, 'nextUrl', {
+      get: () => ({
+        pathname: parsedUrl.pathname,
+        searchParams: parsedUrl.searchParams,
+        search: parsedUrl.search,
+        href: url,
+      }),
+      enumerable: true,
+      configurable: true
+    });
   }
   
   json() {
@@ -34,6 +53,17 @@ global.Response = class MockResponse {
   json() {
     return Promise.resolve(typeof this.body === 'string' ? JSON.parse(this.body) : this.body);
   }
+  
+  static json(data, init = {}) {
+    return new MockResponse(JSON.stringify(data), init);
+  }
+};
+
+// Mock NextResponse
+global.NextResponse = {
+  json: (data, init = {}) => {
+    return new global.Response(JSON.stringify(data), init);
+  },
 };
 
 // Mock console methods to reduce noise in tests
