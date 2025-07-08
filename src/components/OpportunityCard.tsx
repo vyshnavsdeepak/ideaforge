@@ -1,6 +1,7 @@
 import { Badge } from './ui/Badge';
 import { Delta4Radar } from './Delta4Radar';
 import { ExternalLink, TrendingUp, Users, Clock, Target } from 'lucide-react';
+import { formatRedditUrl } from '../lib/reddit-utils';
 
 interface OpportunityCardProps {
   opportunity: {
@@ -203,7 +204,7 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
             <span>{new Date(opportunity.createdAt).toLocaleDateString()}</span>
             {opportunity.redditPost.permalink && (
               <a
-                href={`https://reddit.com${opportunity.redditPost.permalink}`}
+                href={formatRedditUrl(opportunity.redditPost.permalink) || '#'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"

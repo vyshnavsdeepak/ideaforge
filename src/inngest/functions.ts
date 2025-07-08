@@ -2,6 +2,11 @@ import { inngest } from "../lib/inngest";
 import { RedditClient, TARGET_SUBREDDITS } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
+import { 
+  checkRedditPostDuplication, 
+  checkOpportunityDuplication, 
+  updateRedditPost 
+} from "../lib/deduplication";
 
 export const scrapeSubreddit = inngest.createFunction(
   { id: "scrape-subreddit" },
@@ -19,40 +24,79 @@ export const scrapeSubreddit = inngest.createFunction(
     });
 
     const storedPosts = await step.run("store-reddit-posts", async () => {
-      console.log(`[SCRAPE] Processing ${posts.length} posts for storage`);
+      console.log(`[SCRAPE] Processing ${posts.length} posts for storage with enhanced deduplication`);
       const newPosts = [];
+      const updatedPosts = [];
+      const skippedPosts = [];
       
       for (const post of posts) {
-        console.log(`[SCRAPE] Checking if post ${post.redditId} exists...`);
-        const existing = await prisma.redditPost.findUnique({
-          where: { redditId: post.redditId }
-        });
+        console.log(`[SCRAPE] Checking post ${post.redditId}: ${post.title.substring(0, 50)}...`);
         
-        if (!existing) {
-          console.log(`[SCRAPE] Storing new post: ${post.title.substring(0, 50)}...`);
-          const stored = await prisma.redditPost.create({
-            data: {
-              redditId: post.redditId,
-              title: post.title,
-              content: post.content,
-              subreddit: post.subreddit,
-              author: post.author,
-              score: post.score,
-              upvotes: post.upvotes,
-              downvotes: post.downvotes,
-              numComments: post.numComments,
-              url: post.url,
-              permalink: post.permalink,
-              createdUtc: post.createdUtc,
+        // Enhanced deduplication check
+        const duplicationResult = await checkRedditPostDuplication(
+          post.redditId,
+          post.title,
+          post.content || '',
+          post.subreddit,
+          post.author
+        );
+        
+        if (duplicationResult.isDuplicate) {
+          console.log(`[SCRAPE] Post ${post.redditId} is duplicate: ${duplicationResult.reason}`);
+          
+          // If it's an exact Reddit ID match, update the existing post with new data
+          if (duplicationResult.reason === 'Exact Reddit ID match') {
+            try {
+              await updateRedditPost(post.redditId, {
+                score: post.score,
+                upvotes: post.upvotes,
+                downvotes: post.downvotes,
+                numComments: post.numComments
+              });
+              updatedPosts.push(post.redditId);
+              console.log(`[SCRAPE] Updated existing post ${post.redditId} with new scores`);
+            } catch (error) {
+              console.error(`[SCRAPE] Error updating post ${post.redditId}:`, error);
             }
-          });
-          newPosts.push(stored);
+          } else {
+            skippedPosts.push({
+              redditId: post.redditId,
+              reason: duplicationResult.reason,
+              similarity: duplicationResult.similarityScore
+            });
+          }
         } else {
-          console.log(`[SCRAPE] Post ${post.redditId} already exists, skipping`);
+          // Post is not a duplicate, store it
+          console.log(`[SCRAPE] Storing new post: ${post.title.substring(0, 50)}...`);
+          try {
+            const stored = await prisma.redditPost.create({
+              data: {
+                redditId: post.redditId,
+                title: post.title,
+                content: post.content,
+                subreddit: post.subreddit,
+                author: post.author,
+                score: post.score,
+                upvotes: post.upvotes,
+                downvotes: post.downvotes,
+                numComments: post.numComments,
+                url: post.url,
+                permalink: post.permalink,
+                createdUtc: post.createdUtc,
+              }
+            });
+            newPosts.push(stored);
+          } catch (error) {
+            console.error(`[SCRAPE] Error storing post ${post.redditId}:`, error);
+          }
         }
       }
       
-      console.log(`[SCRAPE] Stored ${newPosts.length} new posts`);
+      console.log(`[SCRAPE] Results: ${newPosts.length} new posts, ${updatedPosts.length} updated, ${skippedPosts.length} skipped`);
+      if (skippedPosts.length > 0) {
+        console.log(`[SCRAPE] Skipped reasons:`, skippedPosts.map(p => p.reason));
+      }
+      
       return newPosts;
     });
 
@@ -127,6 +171,33 @@ export const analyzeOpportunity = inngest.createFunction(
       const opportunity = await step.run("store-opportunity", async () => {
         const opp = analysis.opportunity!;
         
+        console.log(`[AI] Checking for duplicate opportunities: ${opp.title}`);
+        
+        // Check for duplicate opportunities
+        const duplicationResult = await checkOpportunityDuplication(
+          opp.title,
+          opp.description,
+          opp.proposedSolution
+        );
+        
+        if (duplicationResult.isDuplicate) {
+          console.log(`[AI] Opportunity is duplicate: ${duplicationResult.reason}`);
+          if (duplicationResult.similarityScore) {
+            console.log(`[AI] Similarity score: ${duplicationResult.similarityScore.toFixed(2)}`);
+          }
+          
+          // Return the existing opportunity ID instead of creating a new one
+          const existingOpportunity = await prisma.opportunity.findUnique({
+            where: { id: duplicationResult.existingId! }
+          });
+          
+          if (existingOpportunity) {
+            console.log(`[AI] Returning existing opportunity: ${existingOpportunity.title}`);
+            return existingOpportunity;
+          }
+        }
+        
+        console.log(`[AI] Creating new opportunity: ${opp.title}`);
         return await prisma.opportunity.create({
           data: {
             title: opp.title,

@@ -84,6 +84,9 @@ model RedditPost {
   @@index([subreddit])
   @@index([processedAt])
   @@index([createdUtc])
+  @@index([title])
+  @@index([author])
+  @@index([title, author])
 }
 
 model Opportunity {
@@ -130,6 +133,9 @@ model Opportunity {
   @@index([overallScore])
   @@index([viabilityThreshold])
   @@index([createdAt])
+  @@index([title])
+  @@index([description])
+  @@index([proposedSolution])
 }
 
 model UserFavorite {

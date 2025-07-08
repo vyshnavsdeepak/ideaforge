@@ -143,7 +143,7 @@ export class RedditClient {
       downvotes: post.downs,
       numComments: post.num_comments,
       url: post.url,
-      permalink: `https://reddit.com${post.permalink}`,
+      permalink: post.permalink, // Store the raw permalink path from Reddit API
       createdUtc: new Date(post.created_utc * 1000),
     };
   };
