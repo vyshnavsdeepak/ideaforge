@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Search, Filter, SortAsc, SortDesc } from 'lucide-react';
 
 interface OpportunityFiltersProps {
@@ -10,6 +9,13 @@ interface OpportunityFiltersProps {
   initialMinScore?: number;
   initialSortBy?: 'score' | 'date' | 'subreddit';
   initialSortOrder?: 'asc' | 'desc';
+  onFiltersChange?: (filters: {
+    search?: string;
+    subreddit?: string;
+    minScore?: number;
+    sortBy?: 'score' | 'date' | 'subreddit';
+    sortOrder?: 'asc' | 'desc';
+  }) => void;
 }
 
 export function OpportunityFilters({
@@ -18,8 +24,8 @@ export function OpportunityFilters({
   initialMinScore = 0,
   initialSortBy = 'score',
   initialSortOrder = 'desc',
+  onFiltersChange,
 }: OpportunityFiltersProps) {
-  const router = useRouter();
   
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [selectedSubreddit, setSelectedSubreddit] = useState(initialSubreddit);
@@ -33,32 +39,31 @@ export function OpportunityFilters({
     'programming', 'webdev', 'datascience', 'MachineLearning', 'artificialintelligence'
   ];
 
-  const updateURL = useCallback(() => {
-    const params = new URLSearchParams();
-    
-    if (searchTerm) params.set('search', searchTerm);
-    if (selectedSubreddit) params.set('subreddit', selectedSubreddit);
-    if (minScore > 0) params.set('minScore', minScore.toString());
-    if (sortBy !== 'score') params.set('sortBy', sortBy);
-    if (sortOrder !== 'desc') params.set('sortOrder', sortOrder);
-    
-    const queryString = params.toString();
-    router.push(`/opportunities${queryString ? `?${queryString}` : ''}`);
-  }, [searchTerm, selectedSubreddit, minScore, sortBy, sortOrder, router]);
+  const triggerFilterChange = useCallback(() => {
+    if (onFiltersChange) {
+      onFiltersChange({
+        search: searchTerm,
+        subreddit: selectedSubreddit,
+        minScore: minScore,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+      });
+    }
+  }, [searchTerm, selectedSubreddit, minScore, sortBy, sortOrder, onFiltersChange]);
 
   // Debounced search update
   useEffect(() => {
     const timer = setTimeout(() => {
-      updateURL();
+      triggerFilterChange();
     }, 500);
     
     return () => clearTimeout(timer);
-  }, [searchTerm, updateURL]);
+  }, [searchTerm, triggerFilterChange]);
 
   // Immediate updates for other filters
   useEffect(() => {
-    updateURL();
-  }, [selectedSubreddit, minScore, sortBy, sortOrder, updateURL]);
+    triggerFilterChange();
+  }, [selectedSubreddit, minScore, sortBy, sortOrder, triggerFilterChange]);
 
   const handleSubredditToggle = (subreddit: string) => {
     setSelectedSubreddit(prev => prev === subreddit ? '' : subreddit);
@@ -70,7 +75,15 @@ export function OpportunityFilters({
     setMinScore(0);
     setSortBy('score');
     setSortOrder('desc');
-    router.push('/opportunities');
+    if (onFiltersChange) {
+      onFiltersChange({
+        search: '',
+        subreddit: '',
+        minScore: 0,
+        sortBy: 'score',
+        sortOrder: 'desc',
+      });
+    }
   };
 
   return (
