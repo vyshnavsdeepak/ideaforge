@@ -119,6 +119,34 @@ model Opportunity {
   complexity           String?  @default("Medium")
   successProbability   String?  @default("Medium")
   
+  // New categorization fields
+  businessType         String?  @default("Unknown")        // AI-Powered, Non-AI, AI-Adjacent
+  businessModel        String?  @default("Unknown")        // B2B, B2C, B2B2C
+  revenueModel         String?  @default("Unknown")        // SaaS, Marketplace, Service, Product
+  pricingModel         String?  @default("Unknown")        // Subscription, One-time, Commission, Freemium
+  platform             String?  @default("Unknown")        // Web App, Mobile App, Desktop App, Hybrid
+  mobileSupport        String?  @default("Unknown")        // iOS, Android, Cross-platform, Web-based
+  deploymentType       String?  @default("Unknown")        // Browser Extension, API/SDK, Standalone, Cloud
+  developmentType      String?  @default("Unknown")        // No-Code, Low-Code, Custom Development
+  targetAudience       String?  @default("Unknown")        // Individual, Small Business, Enterprise, Developers
+  userType             String?  @default("Unknown")        // Students, Professionals, Entrepreneurs, Creators
+  technicalLevel       String?  @default("Unknown")        // Technical, Non-Technical, Mixed
+  ageGroup             String?  @default("Unknown")        // Gen Z, Millennials, Gen X, Boomers, All Ages
+  geography            String?  @default("Unknown")        // Global, US-Only, EU, Asia-Pacific, Emerging Markets
+  marketType           String?  @default("Unknown")        // Urban, Rural, Suburban, Mixed
+  economicLevel        String?  @default("Unknown")        // Developed, Developing, Mixed
+  industryVertical     String?  @default("Unknown")        // Healthcare, Finance, Education, E-commerce, etc.
+  developmentComplexity String? @default("Unknown")        // Simple, Medium, Complex
+  teamSize             String?  @default("Unknown")        // Solo, Small Team, Large Team
+  capitalRequirement   String?  @default("Unknown")        // Low, Medium, High
+  developmentTime      String?  @default("Unknown")        // Quick MVP, Medium Development, Long Development
+  marketSizeCategory   String?  @default("Unknown")        // Niche, Mass Market, Enterprise
+  competitionLevel     String?  @default("Unknown")        // Low, Medium, High
+  marketTrend          String?  @default("Unknown")        // Emerging, Established, Declining
+  growthPotential      String?  @default("Unknown")        // Linear, Exponential, Network Effects
+  acquisitionStrategy  String?  @default("Unknown")        // Viral, Word-of-Mouth, Paid, Organic
+  scalabilityType      String?  @default("Unknown")        // Scalable, Service-Heavy, Location-Dependent
+  
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   

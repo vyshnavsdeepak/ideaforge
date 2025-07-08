@@ -10,7 +10,6 @@ import { prisma } from '../prisma'
 // Mock the prisma module
 jest.mock('../prisma')
 
-// @ts-expect-error - Mock typing issue
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as unknown as any
 

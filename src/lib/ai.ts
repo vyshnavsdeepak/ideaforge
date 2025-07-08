@@ -15,6 +15,35 @@ export interface Delta4Score {
   emotionalComfort: number;
 }
 
+export interface OpportunityCategories {
+  businessType: string;
+  businessModel: string;
+  revenueModel: string;
+  pricingModel: string;
+  platform: string;
+  mobileSupport: string;
+  deploymentType: string;
+  developmentType: string;
+  targetAudience: string;
+  userType: string;
+  technicalLevel: string;
+  ageGroup: string;
+  geography: string;
+  marketType: string;
+  economicLevel: string;
+  industryVertical: string;
+  developmentComplexity: string;
+  teamSize: string;
+  capitalRequirement: string;
+  developmentTime: string;
+  marketSizeCategory: string;
+  competitionLevel: string;
+  marketTrend: string;
+  growthPotential: string;
+  acquisitionStrategy: string;
+  scalabilityType: string;
+}
+
 export interface OpportunityAnalysis {
   title: string;
   description: string;
@@ -28,6 +57,7 @@ export interface OpportunityAnalysis {
   marketSize: 'Small' | 'Medium' | 'Large' | 'Unknown';
   complexity: 'Low' | 'Medium' | 'High';
   successProbability: 'Low' | 'Medium' | 'High';
+  categories: OpportunityCategories;
   reasoning: {
     speed: string;
     convenience: string;
@@ -84,6 +114,34 @@ const opportunitySchema = z.object({
     marketSize: z.enum(['Small', 'Medium', 'Large', 'Unknown']),
     complexity: z.enum(['Low', 'Medium', 'High']),
     successProbability: z.enum(['Low', 'Medium', 'High']),
+    categories: z.object({
+      businessType: z.string(),
+      businessModel: z.string(),
+      revenueModel: z.string(),
+      pricingModel: z.string(),
+      platform: z.string(),
+      mobileSupport: z.string(),
+      deploymentType: z.string(),
+      developmentType: z.string(),
+      targetAudience: z.string(),
+      userType: z.string(),
+      technicalLevel: z.string(),
+      ageGroup: z.string(),
+      geography: z.string(),
+      marketType: z.string(),
+      economicLevel: z.string(),
+      industryVertical: z.string(),
+      developmentComplexity: z.string(),
+      teamSize: z.string(),
+      capitalRequirement: z.string(),
+      developmentTime: z.string(),
+      marketSizeCategory: z.string(),
+      competitionLevel: z.string(),
+      marketTrend: z.string(),
+      growthPotential: z.string(),
+      acquisitionStrategy: z.string(),
+      scalabilityType: z.string(),
+    }),
     reasoning: z.object({
       speed: z.string(),
       convenience: z.string(),
@@ -145,8 +203,54 @@ For a business to be successful, it must provide a 4+ improvement delta across k
 - Score: ${request.score}
 - Comments: ${request.numComments}
 
+**Categorization Framework:**
+You must categorize each opportunity across ALL dimensions. Use context clues, keywords, and business logic to determine the most likely category for each dimension:
+
+**Business Type:** Determine AI involvement based on solution description:
+- "AI-Powered": Core functionality relies on AI/ML (automation, predictions, NLP, computer vision)
+- "AI-Adjacent": Could benefit from AI but doesn't require it
+- "Non-AI": Traditional solution without AI components
+
+**Business Model:** Analyze target customers and value proposition:
+- "B2B": Businesses as primary customers
+- "B2C": Individual consumers as primary customers  
+- "B2B2C": Businesses selling to consumers
+
+**Revenue Model:** Infer from solution type and market:
+- "SaaS": Software subscription service
+- "Marketplace": Platform connecting buyers/sellers
+- "Service": Human-delivered service
+- "Product": One-time purchase item
+
+**Platform:** Determine optimal delivery method:
+- "Web App": Browser-based application
+- "Mobile App": iOS/Android native app
+- "Desktop App": Desktop software
+- "Hybrid": Multi-platform solution
+
+**Industry Vertical:** Map to primary industry based on problem domain:
+- Healthcare, Finance, Education, E-commerce, Marketing, Legal, Real Estate, Manufacturing, Entertainment, Gaming, Productivity, etc.
+
+**Development Complexity:** Assess technical requirements:
+- "Simple": Basic CRUD, simple UI, existing APIs
+- "Medium": Custom algorithms, integrations, moderate UI
+- "Complex": Advanced AI/ML, complex workflows, high scalability needs
+
+**Target Audience:** Identify primary users:
+- "Individual Consumers": General public
+- "Small Business": <100 employees
+- "Enterprise": Large corporations
+- "Developers": Technical users
+
+**Capital Requirements:** Estimate startup costs:
+- "Low": <$50K (solo founder, simple tech)
+- "Medium": $50K-$500K (small team, moderate tech)
+- "High": >$500K (large team, complex tech, regulatory)
+
+Use scoring-based logic: analyze keywords, context, and business patterns to make intelligent categorization decisions.
+
 **Task:**
-Analyze this Reddit post for potential AI business opportunities. Determine if this post describes a genuine problem that could be solved with AI, and if so, provide a complete Delta 4 analysis.
+Analyze this Reddit post for potential AI business opportunities. Determine if this post describes a genuine problem that could be solved with AI, and if so, provide a complete Delta 4 analysis AND comprehensive categorization.
 
 **Requirements:**
 - Only identify real problems with clear customer pain
@@ -154,9 +258,10 @@ Analyze this Reddit post for potential AI business opportunities. Determine if t
 - Consider market size and implementation feasibility
 - Prioritize problems with existing engagement/validation
 - Provide detailed reasoning for each Delta 4 dimension
+- Use context clues and business logic for ALL categorizations
 - Overall viability threshold is 4+ average score
 
-If this is a viable opportunity, provide the complete analysis. If not, explain why in the reasons array.
+If this is a viable opportunity, provide the complete analysis with full categorization. If not, explain why in the reasons array.
         `,
         temperature: 0.3,
       });
@@ -191,6 +296,7 @@ If this is a viable opportunity, provide the complete analysis. If not, explain 
           marketSize: opportunity.marketSize,
           complexity: opportunity.complexity,
           successProbability: opportunity.successProbability,
+          categories: opportunity.categories,
           reasoning: opportunity.reasoning,
         },
       };
