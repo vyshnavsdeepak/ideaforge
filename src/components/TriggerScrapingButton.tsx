@@ -11,13 +11,15 @@ export function TriggerScrapingButton() {
     setResult(null);
     
     try {
-      const response = await fetch('/api/trigger-scraping', {
+      const response = await fetch('/api/trigger/scraping', {
         method: 'POST',
       });
       
       if (response.ok) {
         const data = await response.json();
-        setResult(`✅ Successfully triggered scraping for ${data.subreddit}`);
+        setResult(`✅ Successfully triggered scraping for r/${data.subreddit}`);
+      } else if (response.status === 401) {
+        setResult('❌ Unauthorized - Please sign in first');
       } else {
         setResult('❌ Failed to trigger scraping');
       }

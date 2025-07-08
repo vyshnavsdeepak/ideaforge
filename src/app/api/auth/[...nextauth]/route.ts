@@ -25,6 +25,7 @@ const authOptions = {
           };
         }
         
+        // No signup allowed - only admin can authenticate
         return null;
       },
     }),

@@ -20,6 +20,8 @@
    npx prisma migrate dev
    npx prisma generate
    ```
+   
+   **Note**: Prisma Client is automatically generated during build via `postinstall` script.
 
 4. **Deploy to Vercel**
    - Connect your GitHub repository to Vercel
@@ -104,10 +106,12 @@ The app includes these automated schedules:
 
 ## 🔒 Security
 
-- Admin dashboard requires password authentication
-- Public can view opportunities but not trigger scraping
-- Environment variables secure sensitive data
-- Rate limiting prevents abuse
+- **No signup allowed** - Only admin can authenticate with password
+- **Protected admin dashboard** - Requires authentication to access
+- **Protected API routes** - Manual scraping requires authentication
+- **Public opportunities view** - Anyone can view discovered opportunities
+- **Environment variables** - Sensitive data secured
+- **Middleware protection** - Routes automatically protected
 
 ## 📱 Usage
 
@@ -120,21 +124,27 @@ The app includes these automated schedules:
 
 ### Common Issues
 
-1. **Database Connection**
+1. **Prisma Client Error on Vercel**
+   - **Issue**: "Prisma has detected that this project was built on Vercel..."
+   - **Solution**: The `postinstall` script automatically runs `prisma generate`
+   - **Manual fix**: Run `npx prisma generate` and redeploy
+
+2. **Database Connection**
    - Check `DATABASE_URL` format
    - Ensure database allows connections
    - Run `npx prisma db push` if needed
 
-2. **Authentication Issues**
+3. **Authentication Issues**
    - Verify `NEXTAUTH_SECRET` and `NEXTAUTH_URL`
    - Check admin password is set correctly
+   - Ensure no signup is enabled (only admin access)
 
-3. **Scheduled Jobs Not Running**
+4. **Scheduled Jobs Not Running**
    - Verify Inngest webhook is configured
    - Check event key and signing key
    - Monitor Inngest dashboard for errors
 
-4. **AI Analysis Failing**
+5. **AI Analysis Failing**
    - Confirm Gemini API key is valid
    - Check API quota limits
    - Monitor application logs
