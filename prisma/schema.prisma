@@ -79,7 +79,8 @@ model RedditPost {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  opportunity Opportunity?
+  // Changed from one-to-one to many-to-many through OpportunitySource
+  opportunitySources OpportunitySource[]
 
   @@index([subreddit])
   @@index([processedAt])
@@ -87,6 +88,23 @@ model RedditPost {
   @@index([title])
   @@index([author])
   @@index([title, author])
+}
+
+model OpportunitySource {
+  id                   String   @id @default(cuid())
+  opportunityId        String
+  redditPostId         String
+  sourceType           String   @default("post") // "post" or "comment"
+  confidence           Float    @default(0.9) // AI confidence for this source
+  
+  opportunity          Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  redditPost           RedditPost @relation(fields: [redditPostId], references: [id], onDelete: Cascade)
+  
+  createdAt            DateTime @default(now())
+  
+  @@unique([opportunityId, redditPostId])
+  @@index([opportunityId])
+  @@index([redditPostId])
 }
 
 model Opportunity {
@@ -118,6 +136,9 @@ model Opportunity {
   marketSize           String?  @default("Unknown")
   complexity           String?  @default("Medium")
   successProbability   String?  @default("Medium")
+  
+  // Multi-source tracking
+  sourceCount          Int      @default(1)                 // Number of posts/comments that generated this idea
   
   // New categorization fields
   businessType         String?  @default("Unknown")        // AI-Powered, Non-AI, AI-Adjacent
@@ -151,9 +172,8 @@ model Opportunity {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   
-  // Relations
-  redditPostId         String   @unique
-  redditPost           RedditPost @relation(fields: [redditPostId], references: [id])
+  // Relations - Changed from one-to-one to many-to-many
+  redditPosts          OpportunitySource[]
   
   // User interactions
   favoriteByUsers      UserFavorite[]
@@ -218,4 +238,17 @@ model UserFavorite {
   opportunity  Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   
   @@unique([userId, opportunityId])
+}
+
+model SubredditCursor {
+  id                   String   @id @default(cuid())
+  subreddit            String   @unique
+  lastRedditId         String   // Last processed Reddit post ID
+  lastCreatedUtc       DateTime // Timestamp of last processed post
+  postsProcessed       Int      @default(0)
+  
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([subreddit])
 }

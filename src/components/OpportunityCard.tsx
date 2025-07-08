@@ -29,7 +29,25 @@ interface OpportunityCardProps {
     complexity: string | null;
     successProbability: string | null;
     createdAt: Date;
-    redditPost: {
+    sourceCount?: number;
+    niche?: string | null;
+    redditPosts?: Array<{
+      id: string;
+      sourceType: string;
+      confidence: number;
+      redditPost: {
+        id: string;
+        title: string;
+        author: string;
+        score: number;
+        numComments: number;
+        permalink: string | null;
+        subreddit: string;
+        createdUtc: Date;
+      };
+    }>;
+    // Keep old structure for backward compatibility
+    redditPost?: {
       title: string;
       author: string;
       score: number;
@@ -192,29 +210,69 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-          <div className="flex items-center gap-4">
-            <span>From: {opportunity.redditPost.title.substring(0, 50)}...</span>
-            <span>by u/{opportunity.redditPost.author}</span>
-            <span>↑ {opportunity.redditPost.score}</span>
-            <span>💬 {opportunity.redditPost.numComments}</span>
+        {/* Show multiple sources if available */}
+        {opportunity.redditPosts && opportunity.redditPosts.length > 0 ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Sources ({opportunity.sourceCount || opportunity.redditPosts.length})
+              </span>
+              {opportunity.sourceCount && opportunity.sourceCount > 1 && (
+                <Badge variant="success" size="sm">
+                  Multi-source validated
+                </Badge>
+              )}
+            </div>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {opportunity.redditPosts.map((source, index) => (
+                <div key={source.id} className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <span className="text-xs font-mono">#{index + 1}</span>
+                    <span className="truncate">r/{source.redditPost.subreddit}</span>
+                    <span className="truncate flex-1">{source.redditPost.title.substring(0, 40)}...</span>
+                    <span>u/{source.redditPost.author}</span>
+                    <span>↑ {source.redditPost.score}</span>
+                  </div>
+                  {source.redditPost.permalink && (
+                    <a
+                      href={formatRedditUrl(source.redditPost.permalink) || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline ml-2"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            <span>{new Date(opportunity.createdAt).toLocaleDateString()}</span>
-            {opportunity.redditPost.permalink && (
-              <a
-                href={formatRedditUrl(opportunity.redditPost.permalink) || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                <ExternalLink className="w-4 h-4" />
-                View Post
-              </a>
-            )}
+        ) : opportunity.redditPost ? (
+          // Fallback for old single-source structure
+          <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4">
+              <span>From: {opportunity.redditPost.title.substring(0, 50)}...</span>
+              <span>by u/{opportunity.redditPost.author}</span>
+              <span>↑ {opportunity.redditPost.score}</span>
+              <span>💬 {opportunity.redditPost.numComments}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              <span>{new Date(opportunity.createdAt).toLocaleDateString()}</span>
+              {opportunity.redditPost.permalink && (
+                <a
+                  href={formatRedditUrl(opportunity.redditPost.permalink) || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View Post
+                </a>
+              )}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );

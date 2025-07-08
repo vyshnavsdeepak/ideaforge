@@ -19,12 +19,52 @@ export const scrapeSubreddit = inngest.createFunction(
     const { subreddit, limit = 25, sort = 'hot', priority = 'normal' } = event.data;
     console.log(`[SCRAPE] Starting scrape for r/${subreddit} with limit ${limit}, sort ${sort}, priority ${priority}`);
 
+    // Get the cursor for this subreddit
+    const cursor = await step.run("get-subreddit-cursor", async () => {
+      const existingCursor = await prisma.subredditCursor.findUnique({
+        where: { subreddit }
+      });
+      console.log(`[SCRAPE] Cursor for r/${subreddit}:`, existingCursor ? 
+        `Last ID: ${existingCursor.lastRedditId}, Last time: ${existingCursor.lastCreatedUtc}` : 
+        'No cursor found (first scrape)');
+      return existingCursor;
+    });
+
     const posts = await step.run("fetch-reddit-posts", async () => {
       console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
       const client = new RedditClient();
-      const result = await client.fetchSubredditPosts(subreddit, sort, limit);
-      console.log(`[SCRAPE] Fetched ${result.length} posts from r/${subreddit}`);
-      return result;
+      let allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
+      
+      // If we have a cursor, filter out posts we've already seen
+      if (cursor) {
+        const cursorTime = cursor.lastCreatedUtc.getTime();
+        const beforeCount = allPosts.length;
+        
+        // Sort posts by created time (newest first)
+        allPosts.sort((a, b) => b.createdUtc.getTime() - a.createdUtc.getTime());
+        
+        // Find where to stop based on cursor
+        const newPosts = [];
+        for (const post of allPosts) {
+          // Stop if we've reached a post older than our cursor
+          if (post.createdUtc.getTime() <= cursorTime) {
+            console.log(`[SCRAPE] Reached cursor boundary at post ${post.redditId}`);
+            break;
+          }
+          // Also check if we've seen this exact post ID
+          if (post.redditId === cursor.lastRedditId) {
+            console.log(`[SCRAPE] Found exact cursor post ${post.redditId}`);
+            break;
+          }
+          newPosts.push(post);
+        }
+        
+        console.log(`[SCRAPE] Filtered ${beforeCount} posts to ${newPosts.length} new posts using cursor`);
+        return newPosts;
+      }
+      
+      console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
+      return allPosts;
     });
 
     const storedPosts = await step.run("store-reddit-posts", async () => {
@@ -136,6 +176,34 @@ export const scrapeSubreddit = inngest.createFunction(
       console.log(`[SCRAPE] No new posts to analyze`);
     }
 
+    // Update cursor if we processed any posts
+    if (posts.length > 0) {
+      await step.run("update-subreddit-cursor", async () => {
+        // Find the newest post we processed
+        const newestPost = posts.reduce((newest, post) => 
+          post.createdUtc.getTime() > newest.createdUtc.getTime() ? post : newest
+        , posts[0]);
+        
+        console.log(`[SCRAPE] Updating cursor for r/${subreddit} to post ${newestPost.redditId} at ${newestPost.createdUtc}`);
+        
+        await prisma.subredditCursor.upsert({
+          where: { subreddit },
+          update: {
+            lastRedditId: newestPost.redditId,
+            lastCreatedUtc: newestPost.createdUtc,
+            postsProcessed: { increment: posts.length },
+            updatedAt: new Date()
+          },
+          create: {
+            subreddit,
+            lastRedditId: newestPost.redditId,
+            lastCreatedUtc: newestPost.createdUtc,
+            postsProcessed: posts.length
+          }
+        });
+      });
+    }
+
     const result = { 
       subreddit, 
       totalPosts: posts.length, 
@@ -213,24 +281,44 @@ export const analyzeOpportunity = inngest.createFunction(
         const duplicationResult = await checkOpportunityDuplication(
           opp.title,
           opp.description,
-          opp.proposedSolution
+          opp.proposedSolution,
+          opp.categories.niche
         );
         
-        if (duplicationResult.isDuplicate) {
-          console.log(`[AI] Opportunity is duplicate: ${duplicationResult.reason}`);
+        if (duplicationResult.isDuplicate && duplicationResult.existingId) {
+          console.log(`[AI] Found similar opportunity: ${duplicationResult.reason}`);
           if (duplicationResult.similarityScore) {
             console.log(`[AI] Similarity score: ${duplicationResult.similarityScore.toFixed(2)}`);
           }
           
-          // Return the existing opportunity ID instead of creating a new one
-          const existingOpportunity = await prisma.opportunity.findUnique({
-            where: { id: duplicationResult.existingId! }
+          // Link this post as another source for the existing opportunity
+          console.log(`[AI] Adding post ${postId} as additional source for opportunity ${duplicationResult.existingId}`);
+          
+          // Create the source link
+          await prisma.opportunitySource.create({
+            data: {
+              opportunityId: duplicationResult.existingId,
+              redditPostId: postId,
+              sourceType: 'post',
+              confidence: analysis.confidence || 0.9,
+            }
           });
           
-          if (existingOpportunity) {
-            console.log(`[AI] Returning existing opportunity: ${existingOpportunity.title}`);
-            return existingOpportunity;
-          }
+          // Increment source count
+          const updatedOpportunity = await prisma.opportunity.update({
+            where: { id: duplicationResult.existingId },
+            data: { 
+              sourceCount: { increment: 1 },
+              // Update scores if this new analysis has higher confidence
+              ...(analysis.confidence > 0.95 ? {
+                overallScore: opp.overallScore,
+                viabilityThreshold: opp.viabilityThreshold,
+              } : {})
+            }
+          });
+          
+          console.log(`[AI] Opportunity now has ${updatedOpportunity.sourceCount} sources`);
+          return updatedOpportunity;
         }
         
         console.log(`[AI] Creating new opportunity: ${opp.title}`);
@@ -291,7 +379,14 @@ export const analyzeOpportunity = inngest.createFunction(
             acquisitionStrategy: opp.categories.acquisitionStrategy,
             scalabilityType: opp.categories.scalabilityType,
             
-            redditPostId: postId,
+            // Create initial source link
+            redditPosts: {
+              create: {
+                redditPostId: postId,
+                sourceType: 'post',
+                confidence: analysis.confidence || 0.9,
+              }
+            }
           }
         });
       });

@@ -72,9 +72,32 @@ export async function GET(request: NextRequest) {
     const opportunities = await prisma.opportunity.findMany({
       where: whereClause,
       include: {
-        redditPost: true,
+        redditPosts: {
+          include: {
+            redditPost: {
+              select: {
+                id: true,
+                title: true,
+                author: true,
+                score: true,
+                numComments: true,
+                permalink: true,
+                subreddit: true,
+                createdUtc: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
-      orderBy: orderClause,
+      orderBy: [
+        // Primary sort
+        orderClause,
+        // Secondary sort by source count (more sources = higher validation)
+        { sourceCount: 'desc' },
+      ],
       skip,
       take: limit,
     });

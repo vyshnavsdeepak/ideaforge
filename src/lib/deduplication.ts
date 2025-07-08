@@ -72,12 +72,14 @@ export async function checkRedditPostDuplication(
 export async function checkOpportunityDuplication(
   title: string,
   description: string,
-  proposedSolution: string
+  proposedSolution: string,
+  niche?: string
 ): Promise<DuplicationCheck> {
-  // 1. Exact title match
+  // 1. Exact title match (and same niche if provided)
   const exactTitleMatch = await prisma.opportunity.findFirst({
     where: {
-      title: { equals: title, mode: 'insensitive' }
+      title: { equals: title, mode: 'insensitive' },
+      ...(niche && { niche: { equals: niche, mode: 'insensitive' } })
     }
   });
 
@@ -85,7 +87,7 @@ export async function checkOpportunityDuplication(
     return {
       isDuplicate: true,
       existingId: exactTitleMatch.id,
-      reason: 'Exact title match'
+      reason: 'Exact title match in same niche'
     };
   }
 
