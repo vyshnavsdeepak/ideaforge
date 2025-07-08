@@ -10,6 +10,32 @@ process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test'
 // Mock fetch globally
 global.fetch = jest.fn()
 
+// Mock Next.js Request and Response for API testing
+global.Request = class MockRequest {
+  constructor(url, options = {}) {
+    this.url = url;
+    this.method = options.method || 'GET';
+    this.headers = new Map(Object.entries(options.headers || {}));
+    this.body = options.body;
+  }
+  
+  json() {
+    return Promise.resolve(this.body ? JSON.parse(this.body) : {});
+  }
+};
+
+global.Response = class MockResponse {
+  constructor(body, options = {}) {
+    this.body = body;
+    this.status = options.status || 200;
+    this.headers = new Map(Object.entries(options.headers || {}));
+  }
+  
+  json() {
+    return Promise.resolve(typeof this.body === 'string' ? JSON.parse(this.body) : this.body);
+  }
+};
+
 // Mock console methods to reduce noise in tests
 global.console = {
   ...console,

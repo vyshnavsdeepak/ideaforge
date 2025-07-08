@@ -9,7 +9,10 @@ import {
 } from "../lib/deduplication";
 
 export const scrapeSubreddit = inngest.createFunction(
-  { id: "scrape-subreddit" },
+  { 
+    id: "scrape-subreddit",
+    retries: 3
+  },
   { event: "reddit/scrape.subreddit" },
   async ({ event, step }) => {
     const { subreddit, limit = 25, sort = 'hot', priority = 'normal' } = event.data;
@@ -103,8 +106,10 @@ export const scrapeSubreddit = inngest.createFunction(
     if (storedPosts.length > 0) {
       await step.run("trigger-ai-analysis", async () => {
         console.log(`[SCRAPE] Triggering AI analysis for ${storedPosts.length} posts`);
-        for (const post of storedPosts) {
-          console.log(`[SCRAPE] Sending AI analysis event for post: ${post.title.substring(0, 50)}...`);
+        for (let i = 0; i < storedPosts.length; i++) {
+          const post = storedPosts[i];
+          console.log(`[SCRAPE] Sending AI analysis event for post ${i + 1}/${storedPosts.length}: ${post.title.substring(0, 50)}...`);
+          
           await inngest.send({
             name: "ai/analyze.opportunity",
             data: {
@@ -117,6 +122,12 @@ export const scrapeSubreddit = inngest.createFunction(
               numComments: post.numComments,
             }
           });
+          
+          // Add delay between requests to prevent rate limiting
+          if (i < storedPosts.length - 1) {
+            console.log(`[SCRAPE] Waiting 2 seconds before next AI analysis trigger...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         }
         console.log(`[SCRAPE] All AI analysis events sent`);
       });
@@ -135,7 +146,14 @@ export const scrapeSubreddit = inngest.createFunction(
 );
 
 export const analyzeOpportunity = inngest.createFunction(
-  { id: "analyze-opportunity" },
+  { 
+    id: "analyze-opportunity",
+    retries: 5,
+    rateLimit: {
+      limit: 10,
+      period: "1m"
+    }
+  },
   { event: "ai/analyze.opportunity" },
   async ({ event, step }) => {
     const { postId, postTitle, postContent, subreddit, author, score, numComments } = event.data;
@@ -154,20 +172,37 @@ export const analyzeOpportunity = inngest.createFunction(
       console.log(`[AI] Starting AI analysis for post: ${postTitle.substring(0, 50)}...`);
       console.log(`[AI] Post content length: ${postContent?.length || 0} characters`);
       
-      const result = await analyzer.analyzeOpportunity({
-        postTitle,
-        postContent,
-        subreddit,
-        author,
-        score,
-        numComments,
-      });
-      
-      console.log(`[AI] Analysis completed. Is opportunity: ${result.isOpportunity}`);
-      return result;
+      try {
+        const result = await analyzer.analyzeOpportunity({
+          postTitle,
+          postContent,
+          subreddit,
+          author,
+          score,
+          numComments,
+        });
+        
+        console.log(`[AI] Analysis completed. Is opportunity: ${result.isOpportunity}`);
+        return result;
+      } catch (error: unknown) {
+        console.error(`[AI] Analysis failed:`, error);
+        
+        // Check if it's a quota/rate limit error
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const statusCode = error && typeof error === 'object' && 'statusCode' in error ? (error as { statusCode: number }).statusCode : 0;
+        
+        if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || statusCode === 429) {
+          console.log(`[AI] Quota/rate limit error detected, will retry with backoff`);
+          // Throw the error to trigger Inngest's retry mechanism
+          throw error;
+        }
+        
+        // For other errors, don't retry
+        throw error;
+      }
     });
 
-    if (analysis.isOpportunity && analysis.opportunity) {
+    if (analysis && analysis.isOpportunity && analysis.opportunity) {
       const opportunity = await step.run("store-opportunity", async () => {
         const opp = analysis.opportunity!;
         
@@ -269,8 +304,8 @@ export const analyzeOpportunity = inngest.createFunction(
       return { 
         success: true, 
         opportunityId: opportunity.id,
-        overallScore: analysis.opportunity.overallScore,
-        viable: analysis.opportunity.viabilityThreshold
+        overallScore: analysis.opportunity?.overallScore || 0,
+        viable: analysis.opportunity?.viabilityThreshold || false
       };
     }
 
@@ -283,7 +318,7 @@ export const analyzeOpportunity = inngest.createFunction(
 
     return { 
       success: false, 
-      reason: analysis.reasons?.[0] || "No opportunity identified" 
+      reason: analysis?.reasons?.[0] || "No opportunity identified" 
     };
   }
 );
