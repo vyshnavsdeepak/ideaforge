@@ -1,4 +1,5 @@
 import { inngest } from "../lib/inngest";
+import { NonRetriableError } from "inngest";
 import { createRedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
@@ -341,7 +342,7 @@ export const scrapeSubreddit = inngest.createFunction(
 export const analyzeOpportunity = inngest.createFunction(
   { 
     id: "analyze-opportunity",
-    retries: 5,
+    retries: 3, // Reduced from 5 to avoid excessive retries
     rateLimit: {
       limit: 15,
       period: "1m"
@@ -357,7 +358,7 @@ export const analyzeOpportunity = inngest.createFunction(
       const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
       if (!googleApiKey) {
         console.error(`[AI] Google AI API key not configured`);
-        throw new Error("Google AI API key not configured");
+        throw new NonRetriableError("Google AI API key not configured");
       }
       console.log(`[AI] Google AI API key found, creating analyzer...`);
 
@@ -844,7 +845,7 @@ export const scrapeAllSubreddits = inngest.createFunction(
 export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
   { 
     id: "batch-analyze-opportunities",
-    retries: 3,
+    retries: 2, // Reduced retries for batch operations
     rateLimit: {
       limit: 5,
       period: "1m"
@@ -861,11 +862,11 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
       console.log(`[BATCH_AI] Posts received: ${posts?.length || 0}`);
       
       if (!subreddit) {
-        throw new Error("Subreddit is required but not provided");
+        throw new NonRetriableError("Subreddit is required but not provided");
       }
       
       if (!posts || !Array.isArray(posts) || posts.length === 0) {
-        throw new Error(`Invalid posts data: ${posts ? `Array with ${posts.length} items` : 'null/undefined'}`);
+        throw new NonRetriableError(`Invalid posts data: ${posts ? `Array with ${posts.length} items` : 'null/undefined'}`);
       }
       
       // Validate post structure - content can be empty/null for image/link posts
@@ -875,7 +876,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
       
       if (invalidPosts.length > 0) {
         console.error(`[BATCH_AI] Found ${invalidPosts.length} invalid posts:`, invalidPosts.map(p => p.postId || 'unknown'));
-        throw new Error(`${invalidPosts.length} posts have missing required fields`);
+        throw new NonRetriableError(`${invalidPosts.length} posts have missing required fields`);
       }
       
       const validationResult = {
@@ -942,6 +943,35 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
         return batchResponse;
       } catch (analysisError) {
         console.error(`[BATCH_AI] Batch analysis failed:`, analysisError);
+        
+        // Check if it's a non-retriable AI error
+        if (analysisError instanceof Error) {
+          const message = analysisError.message.toLowerCase();
+          if (
+            message.includes('api key') ||
+            message.includes('unauthorized') ||
+            message.includes('forbidden') ||
+            message.includes('bad request') ||
+            message.includes('invalid model') ||
+            message.includes('malformed')
+          ) {
+            throw new NonRetriableError(`AI configuration error: ${analysisError.message}`);
+          }
+          
+          // Rate limit or quota errors are retriable
+          if (
+            message.includes('rate limit') ||
+            message.includes('quota') ||
+            message.includes('too many requests') ||
+            message.includes('service unavailable') ||
+            message.includes('timeout')
+          ) {
+            console.log(`[BATCH_AI] Retriable AI error, will retry: ${analysisError.message}`);
+            throw analysisError; // Let Inngest retry
+          }
+        }
+        
+        // Default to retriable for unknown errors
         throw new Error(`Batch AI analysis failed: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}`);
       }
     });
@@ -1136,7 +1166,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
 export const processUnprocessedPosts = inngest.createFunction(
   { 
     id: "process-unprocessed-posts",
-    retries: 3,
+    retries: 2, // Reduced retries for batch operations
     rateLimit: {
       limit: 2,
       period: "1m"
