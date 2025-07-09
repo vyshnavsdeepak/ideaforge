@@ -1042,7 +1042,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
     });
     
     console.log(`[BATCH_AI] Batch analysis completed successfully for r/${inputValidation.subreddit}`);
-    console.log(`[BATCH_AI] Summary: ${finalResults.successCount}/${finalResults.postsAnalyzed} opportunities created (${(finalResults.executionSummary as { successRate?: number }).successRate} success rate)`);
+    console.log(`[BATCH_AI] Summary: ${finalResults.successCount}/${finalResults.postsAnalyzed} opportunities created (${(finalResults.executionSummary as { successRate?: string }).successRate} success rate)`);
     
     return finalResults;
   }

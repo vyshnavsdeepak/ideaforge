@@ -134,6 +134,8 @@ export async function GET(request: Request) {
           opportunities: 0,
           successRate: 0,
           averageProcessingTime: 0,
+          averageCostPerPost: 0,
+          opportunityRate: 0,
         };
       }
       acc[subreddit].count++;
@@ -148,6 +150,8 @@ export async function GET(request: Request) {
       opportunities: number;
       successRate: number;
       averageProcessingTime: number;
+      averageCostPerPost: number;
+      opportunityRate: number;
     }>);
 
     // Calculate averages for subreddit stats

@@ -197,7 +197,37 @@ export class Delta4Analyzer {
         );
 
         return {
-          ...this.transformAnalysis(analysis),
+          ...this.transformAnalysis(analysis as {
+            isOpportunity: boolean;
+            confidence: number;
+            reasons?: string[];
+            opportunity?: {
+              title: string;
+              description: string;
+              currentSolution?: string;
+              proposedSolution: string;
+              marketContext?: string;
+              implementationNotes?: string;
+              delta4Scores: Delta4Score;
+              marketSize: 'Small' | 'Medium' | 'Large' | 'Unknown';
+              complexity: 'Low' | 'Medium' | 'High';
+              successProbability: 'Low' | 'Medium' | 'High';
+              categories: OpportunityCategories;
+              reasoning: {
+                speed: string;
+                convenience: string;
+                trust: string;
+                price: string;
+                status: string;
+                predictability: string;
+                uiUx: string;
+                easeOfUse: string;
+                legalFriction: string;
+                emotionalComfort: string;
+              };
+              [key: string]: unknown;
+            };
+          }),
           cost,
         };
       } else {
@@ -311,11 +341,28 @@ If this is a viable opportunity, provide the complete analysis with full categor
     confidence: number;
     reasons?: string[];
     opportunity?: {
-      delta4Scores: {
-        pain: number;
-        urgency: number;
-        reach: number;
-        impact: number;
+      title: string;
+      description: string;
+      currentSolution?: string;
+      proposedSolution: string;
+      marketContext?: string;
+      implementationNotes?: string;
+      delta4Scores: Delta4Score;
+      marketSize: 'Small' | 'Medium' | 'Large' | 'Unknown';
+      complexity: 'Low' | 'Medium' | 'High';
+      successProbability: 'Low' | 'Medium' | 'High';
+      categories: OpportunityCategories;
+      reasoning: {
+        speed: string;
+        convenience: string;
+        trust: string;
+        price: string;
+        status: string;
+        predictability: string;
+        uiUx: string;
+        easeOfUse: string;
+        legalFriction: string;
+        emotionalComfort: string;
       };
       [key: string]: unknown;
     };

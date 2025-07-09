@@ -27,6 +27,7 @@ export class AIWithCostTracking {
     operation = 'individual',
     batchSize,
     batchMode = false,
+    retryCount = 0,
   }: {
     model: string;
     schema: z.ZodSchema<T>;
@@ -81,6 +82,7 @@ export class AIWithCostTracking {
         startTime,
         endTime,
         success: true,
+        retryCount,
       };
 
       // Track the usage
@@ -111,6 +113,7 @@ export class AIWithCostTracking {
         success: false,
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         httpStatusCode: this.extractHttpStatus(error),
+        retryCount,
       };
 
       // Track the failed usage
@@ -250,6 +253,7 @@ export async function analyzeSinglePostWithCostTracking(
     temperature = 0.3,
     redditPostId,
     sessionData,
+    retryCount = 0,
   } = options;
 
   const ai = new AIWithCostTracking(sessionData);
@@ -276,10 +280,10 @@ export async function analyzeSinglePostWithCostTracking(
         subreddit: request.subreddit,
         analysisType: 'individual',
         model,
-        isOpportunity: result.object.isOpportunity || false,
+        isOpportunity: (result.object as { isOpportunity?: boolean }).isOpportunity || false,
         opportunityId: undefined, // Will be set later when opportunity is created
-        confidence: result.object.confidence || undefined,
-        overallScore: result.object.opportunity?.overallScore || undefined,
+        confidence: (result.object as { confidence?: number }).confidence || undefined,
+        overallScore: (result.object as { opportunity?: { overallScore?: number } }).opportunity?.overallScore || undefined,
         processingTime,
         retryCount,
         success: true,
@@ -391,7 +395,7 @@ Comments: ${post.numComments}
 ---
 `).join('\n')}`;
 
-      const { result } = await ai.generateObjectWithTracking({
+      const { result, usage } = await ai.generateObjectWithTracking({
         model,
         schema,
         prompt: batchPrompt,
@@ -404,7 +408,19 @@ Comments: ${post.numComments}
       allUsage.push(usage);
 
       // Process batch results
-      const batchResults = result.object.analyses || [];
+      type BatchAnalysisResult = {
+        success: boolean;
+        analysis?: {
+          isOpportunity?: boolean;
+          confidence?: number;
+          opportunity?: {
+            overallScore?: number;
+          };
+        };
+        error?: string;
+      };
+      
+      const batchResults = (result.object as { analyses?: BatchAnalysisResult[] }).analyses || [];
       for (let j = 0; j < batch.length; j++) {
         const request = batch[j];
         const analysis = batchResults[j];

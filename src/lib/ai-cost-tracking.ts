@@ -43,6 +43,7 @@ export interface AIUsageMetrics {
   success: boolean;
   errorMessage?: string;
   httpStatusCode?: number;
+  retryCount?: number;
 }
 
 export interface AIAnalysisSessionData {

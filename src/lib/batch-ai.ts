@@ -469,7 +469,7 @@ For each post, provide:
 Return analyses in the exact same order as the input posts.
 `;
 
-  const { result } = await ai.generateObjectWithTracking({
+  const { result, cost } = await ai.generateObjectWithTracking({
     model: 'gemini-2.5-flash',
     schema: batchAnalysisSchema,
     prompt,
@@ -531,7 +531,7 @@ Comments: ${request.numComments}
 Provide a detailed analysis including Delta 4 scores, market assessment, and implementation guidance.
 `;
 
-  const { result } = await ai.generateObjectWithTracking({
+  const { result, cost } = await ai.generateObjectWithTracking({
     model: 'gemini-2.5-pro',
     schema: opportunitySchema,
     prompt,
