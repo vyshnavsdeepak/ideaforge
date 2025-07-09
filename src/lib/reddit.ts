@@ -52,7 +52,11 @@ export interface RedditComment {
   created_utc: number;
   subreddit?: string;
   parent_id?: string;
-  replies?: RedditComment[];
+  replies?: {
+    data?: {
+      children?: unknown[];
+    };
+  };
 }
 
 export interface RedditCommentResponse {
@@ -320,8 +324,11 @@ export class RedditClient {
         });
         
         // Process replies recursively
-        if (comment.replies && comment.replies.data && comment.replies.data.children) {
-          comment.replies.data.children.forEach(processComment);
+        if (comment.replies && typeof comment.replies === 'object' && 'data' in comment.replies) {
+          const repliesData = comment.replies.data as { children?: unknown[] };
+          if (repliesData.children) {
+            repliesData.children.forEach(processComment);
+          }
         }
       }
     };
