@@ -365,7 +365,10 @@ export class AuthenticatedRedditClient extends RedditClient {
   ): Promise<ProcessedRedditPost[]> {
     console.log(`[REDDIT_AUTH] Fetching r/${subreddit} with authentication`);
     
-    const endpoint = `/r/${subreddit}/${sort}?limit=${limit}&raw_json=1`;
+    // Reddit API has a maximum limit of 100 per request
+    // For historical recovery, we'll use the maximum
+    const actualLimit = Math.min(limit, 100);
+    const endpoint = `/r/${subreddit}/${sort}?limit=${actualLimit}&raw_json=1`;
     
     try {
       const response = await this.authClient.makeAuthenticatedRequest(endpoint);

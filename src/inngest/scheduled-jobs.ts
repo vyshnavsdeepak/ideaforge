@@ -315,7 +315,7 @@ export const historicalRecoveryScraper = inngest.createFunction(
             name: "reddit/scrape.subreddit",
             data: { 
               subreddit: subreddit.name,
-              limit: 500, // Large limit for historical recovery
+              limit: 100, // Reddit API maximum limit per request
               sort: sortType,
               priority: 'recovery',
               historical: true, // Flag to ignore cursor and go back in time

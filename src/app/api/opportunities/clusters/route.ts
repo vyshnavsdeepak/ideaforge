@@ -103,7 +103,7 @@ export async function POST() {
     }
 
     // Force recalculate clusters
-    const clusters = await opportunityClusteringEngine.clusterSimilarOpportunities(true);
+    const clusters = await opportunityClusteringEngine.clusterSimilarOpportunities();
     
     return NextResponse.json({
       success: true,

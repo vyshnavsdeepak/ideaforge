@@ -25,11 +25,22 @@ export const scrapeSubreddit = inngest.createFunction(
   },
   { event: "reddit/scrape.subreddit" },
   async ({ event, step }) => {
-    const { subreddit, limit = 25, sort = 'hot', priority = 'normal' } = event.data;
-    console.log(`[SCRAPE] Starting scrape for r/${subreddit} with limit ${limit}, sort ${sort}, priority ${priority}`);
+    const { subreddit, limit = 25, sort = 'hot', priority = 'normal', historical = false } = event.data;
+    console.log(`[SCRAPE] Starting scrape for r/${subreddit} with limit ${limit}, sort ${sort}, priority ${priority}, historical: ${historical}`);
 
-    // Get the cursor for this subreddit
+    // Get the cursor for this subreddit (skip for historical recovery)
     const cursor = await step.run("get-subreddit-cursor", async () => {
+      if (historical) {
+        console.log(`[SCRAPE] Historical recovery mode - bypassing cursor for r/${subreddit}`);
+        return {
+          hasCursor: false,
+          lastRedditId: null,
+          lastCreatedUtc: null,
+          postsProcessed: 0,
+          cursor: null
+        };
+      }
+      
       const existingCursor = await prisma.subredditCursor.findUnique({
         where: { subreddit }
       });
@@ -46,14 +57,18 @@ export const scrapeSubreddit = inngest.createFunction(
     });
 
     const posts = await step.run("fetch-reddit-posts", async () => {
-      console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
+      if (historical) {
+        console.log(`[SCRAPE] HISTORICAL RECOVERY: Fetching ${sort} posts from r/${subreddit} (limit: ${limit}) - BYPASSING CURSOR`);
+      } else {
+        console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
+      }
       const client = createRedditClient();
       
       try {
         const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
         
-        // If we have a cursor, filter out posts we've already seen
-        if (cursor.hasCursor && cursor.cursor) {
+        // If we have a cursor, filter out posts we've already seen (skipped for historical recovery)
+        if (cursor.hasCursor && cursor.cursor && !historical) {
           const cursorTime = new Date(cursor.cursor.lastCreatedUtc).getTime();
           const beforeCount = allPosts.length;
           
@@ -89,14 +104,19 @@ export const scrapeSubreddit = inngest.createFunction(
           };
         }
         
-        console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
+        if (historical) {
+          console.log(`[SCRAPE] HISTORICAL RECOVERY: Fetched ${allPosts.length} posts from r/${subreddit} (no cursor filtering)`);
+        } else {
+          console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
+        }
         return {
           posts: allPosts,
           totalFetched: allPosts.length,
           filtered: 0,
           usedCursor: false,
           cursorTime: null,
-          error: null
+          error: null,
+          historical: historical
         };
         
       } catch (error) {
@@ -267,8 +287,8 @@ export const scrapeSubreddit = inngest.createFunction(
         reason: 'No new posts to process'
       };
 
-    // Update cursor if we processed any posts
-    const cursorUpdateResult = posts.posts.length > 0 ? await step.run("update-subreddit-cursor", async () => {
+    // Update cursor if we processed any posts (skip for historical recovery)
+    const cursorUpdateResult = posts.posts.length > 0 && !historical ? await step.run("update-subreddit-cursor", async () => {
       // Find the newest post we processed
       const validPosts = posts.posts.filter(post => post !== null);
       if (validPosts.length === 0) {
@@ -314,9 +334,10 @@ export const scrapeSubreddit = inngest.createFunction(
     }) : { 
       subreddit, 
       skipped: true, 
-      reason: 'No posts processed',
+      reason: historical ? 'Historical recovery - cursor not updated' : 'No posts processed',
       postsReceived: posts.posts?.length || 0,
-      wasBlocked: posts.error === 'blocked'
+      wasBlocked: posts.error === 'blocked',
+      historical: historical
     };
 
     const result = { 
@@ -2487,7 +2508,7 @@ export const clusterOpportunities = inngest.createFunction(
     // Step 1: Cluster similar opportunities
     const clusters = await step.run("cluster-similar-opportunities", async () => {
       console.log(`[CLUSTERING] Running semantic clustering analysis`);
-      const result = await opportunityClusteringEngine.clusterSimilarOpportunities(forceRecalculate);
+      const result = await opportunityClusteringEngine.clusterSimilarOpportunities();
       console.log(`[CLUSTERING] Generated ${result.length} opportunity clusters`);
       return result;
     });
