@@ -92,6 +92,11 @@ model RedditPost {
   commentAnalysisError  String? @db.Text // Error message if analysis failed
   commentOpportunitiesFound Int? @default(0) // Number of opportunities found in comments
   
+  // Source tracking
+  sourceType      String   @default("subreddit_scrape") // "subreddit_scrape", "user_activity_scrape"
+  sourceUserId    String?  // Links to RedditUser if scraped from user activity
+  sourceUser      RedditUser? @relation(fields: [sourceUserId], references: [id])
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -100,6 +105,9 @@ model RedditPost {
   
   // AI Usage Tracking
   costAnalyses       AIPostAnalysis[]
+  
+  // Post comment analysis
+  postComments       RedditPostComment[]
 
   @@index([subreddit])
   @@index([processedAt])
@@ -107,6 +115,8 @@ model RedditPost {
   @@index([title])
   @@index([author])
   @@index([title, author])
+  @@index([sourceType])
+  @@index([sourceUserId])
 }
 
 model OpportunitySource {
@@ -211,6 +221,13 @@ model Opportunity {
   
   // AI Usage Tracking
   costAnalyses         AIPostAnalysis[]
+  
+  // User activity tracking
+  userPosts            RedditUserPost[]
+  userComments         RedditUserComment[]
+  
+  // Post comment analysis
+  postComments         RedditPostComment[]
 
   @@index([subreddit])
   @@index([overallScore])
@@ -257,6 +274,59 @@ model MarketDemandOpportunity {
   createdAt            DateTime @default(now())
   
   @@unique([clusterId, opportunityId])
+}
+
+// Reddit Post Comments (scraped from post comment sections)
+model RedditPostComment {
+  id                   String   @id @default(cuid())
+  postId               String                       // Links to RedditPost
+  redditId             String   @unique             // Reddit comment ID
+  
+  // Comment content
+  body                 String   @db.Text           // Comment text
+  permalink            String?                     // Comment permalink
+  
+  // Comment metadata
+  subreddit            String
+  author               String                      // Comment author
+  score                Int      @default(0)
+  createdUtc           DateTime                    // When commented on Reddit
+  
+  // Thread context
+  parentId             String?                     // Parent comment ID
+  isTopLevel           Boolean  @default(false)    // Is this a top-level comment
+  depth                Int      @default(0)        // Comment depth in thread
+  
+  // Comment flags
+  isSubmitter          Boolean  @default(false)    // Is commenter the post author
+  scoreHidden          Boolean  @default(false)
+  edited               Boolean  @default(false)
+  
+  // Analysis fields
+  analyzed             Boolean  @default(false)
+  analysisDate         DateTime?
+  isOpportunity        Boolean?
+  opportunityId        String?                     // Links to Opportunity if found
+  
+  // Raw data
+  rawData              Json?                       // Raw comment data from Reddit API
+  
+  // Relations
+  post                 RedditPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  opportunity          Opportunity? @relation(fields: [opportunityId], references: [id])
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([postId])
+  @@index([subreddit])
+  @@index([author])
+  @@index([createdUtc])
+  @@index([score])
+  @@index([analyzed])
+  @@index([isOpportunity])
+  @@index([parentId])
 }
 
 model UserFavorite {
@@ -589,4 +659,205 @@ model AICostOptimization {
   @@index([priority])
   @@index([status])
   @@index([potentialSavings])
+}
+
+// Reddit User Activity Tracking Models
+
+// Reddit User Profile
+model RedditUser {
+  id                   String   @id @default(cuid())
+  username             String   @unique              // Reddit username (without u/ prefix)
+  
+  // Profile information
+  profileData          Json?                        // Raw profile data from Reddit API
+  accountCreated       DateTime?                    // Account creation date
+  linkKarma            Int?     @default(0)         // Link karma
+  commentKarma         Int?     @default(0)         // Comment karma
+  totalKarma           Int?     @default(0)         // Total karma
+  
+  // Activity tracking
+  lastScraped          DateTime?                    // Last time we scraped this user
+  postsScraped         Int      @default(0)         // Total posts scraped
+  commentsScraped      Int      @default(0)         // Total comments scraped
+  
+  // Scraping status
+  scrapingStatus       String?                      // "pending", "in_progress", "completed", "failed"
+  scrapingJobId        String?                      // Inngest job ID
+  scrapingStarted      DateTime?                    // When scraping started
+  scrapingCompleted    DateTime?                    // When scraping completed
+  scrapingError        String?  @db.Text           // Error message if scraping failed
+  
+  // Analysis status
+  analysisStatus       String?                      // "pending", "in_progress", "completed", "failed"
+  analysisJobId        String?                      // Inngest job ID for batch analysis
+  analysisStarted      DateTime?                    // When analysis started
+  analysisCompleted    DateTime?                    // When analysis completed
+  analysisError        String?  @db.Text           // Error message if analysis failed
+  opportunitiesFound   Int      @default(0)         // Number of opportunities found
+  
+  // Relations
+  posts                RedditUserPost[]
+  comments             RedditUserComment[]
+  scrapedRedditPosts   RedditPost[]        // Posts scraped from this user's activity
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([username])
+  @@index([scrapingStatus])
+  @@index([analysisStatus])
+  @@index([lastScraped])
+  @@index([totalKarma])
+}
+
+// Reddit User Posts
+model RedditUserPost {
+  id                   String   @id @default(cuid())
+  userId               String                       // Links to RedditUser
+  redditId             String   @unique             // Reddit post ID
+  
+  // Post content
+  title                String
+  content              String?  @db.Text           // Post content (selftext)
+  url                  String?                     // External URL if link post
+  permalink            String                      // Reddit permalink
+  
+  // Post metadata
+  subreddit            String
+  author               String                      // Should match user.username
+  score                Int      @default(0)
+  upvotes              Int      @default(0)
+  downvotes            Int      @default(0)
+  numComments          Int      @default(0)
+  createdUtc           DateTime                    // When posted on Reddit
+  
+  // Post type and flags
+  isVideo              Boolean  @default(false)
+  isImage              Boolean  @default(false)
+  isLink               Boolean  @default(false)
+  isSelf               Boolean  @default(false)
+  over18               Boolean  @default(false)
+  spoiler              Boolean  @default(false)
+  locked               Boolean  @default(false)
+  stickied             Boolean  @default(false)
+  
+  // Analysis fields
+  analyzed             Boolean  @default(false)
+  analysisDate         DateTime?
+  isOpportunity        Boolean?
+  opportunityId        String?                     // Links to Opportunity if found
+  
+  // Raw data
+  rawData              Json?                       // Raw post data from Reddit API
+  
+  // Relations
+  user                 RedditUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity          Opportunity? @relation(fields: [opportunityId], references: [id])
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([subreddit])
+  @@index([author])
+  @@index([createdUtc])
+  @@index([score])
+  @@index([analyzed])
+  @@index([isOpportunity])
+}
+
+// Reddit User Comments
+model RedditUserComment {
+  id                   String   @id @default(cuid())
+  userId               String                       // Links to RedditUser
+  redditId             String   @unique             // Reddit comment ID
+  
+  // Comment content
+  body                 String   @db.Text           // Comment text
+  permalink            String?                     // Comment permalink
+  
+  // Comment context
+  subreddit            String
+  author               String                      // Should match user.username
+  score                Int      @default(0)
+  createdUtc           DateTime                    // When commented on Reddit
+  
+  // Thread context
+  postId               String?                     // Reddit post ID (not our internal ID)
+  postTitle            String?                     // Title of the post commented on
+  parentId             String?                     // Parent comment ID
+  isTopLevel           Boolean  @default(false)    // Is this a top-level comment
+  
+  // Comment flags
+  isSubmitter          Boolean  @default(false)    // Is commenter the post author
+  scoreHidden          Boolean  @default(false)
+  edited               Boolean  @default(false)
+  
+  // Analysis fields
+  analyzed             Boolean  @default(false)
+  analysisDate         DateTime?
+  isOpportunity        Boolean?
+  opportunityId        String?                     // Links to Opportunity if found
+  
+  // Raw data
+  rawData              Json?                       // Raw comment data from Reddit API
+  
+  // Relations
+  user                 RedditUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity          Opportunity? @relation(fields: [opportunityId], references: [id])
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([subreddit])
+  @@index([author])
+  @@index([createdUtc])
+  @@index([score])
+  @@index([analyzed])
+  @@index([isOpportunity])
+  @@index([postId])
+}
+
+// User Activity Scraping Jobs
+model UserScrapingJob {
+  id                   String   @id @default(cuid())
+  userId               String                       // Links to RedditUser
+  username             String                       // Reddit username
+  
+  // Job configuration
+  scrapeType           String                       // "full", "posts_only", "comments_only", "incremental"
+  limit                Int?                         // Max items to scrape (null = all)
+  timeframe            String?                      // "all", "year", "month", "week", "day"
+  
+  // Job status
+  status               String   @default("pending") // "pending", "in_progress", "completed", "failed"
+  jobId                String?                      // Inngest job ID
+  startedAt            DateTime?
+  completedAt          DateTime?
+  error                String?  @db.Text
+  
+  // Progress tracking
+  postsScraped         Int      @default(0)
+  commentsScraped      Int      @default(0)
+  totalItems           Int?                         // Total items to scrape (if known)
+  currentPage          Int      @default(1)
+  
+  // Results
+  newPosts             Int      @default(0)         // New posts found
+  newComments          Int      @default(0)         // New comments found
+  duplicatesSkipped    Int      @default(0)         // Duplicates skipped
+  
+  // Metadata
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([username])
+  @@index([status])
+  @@index([scrapeType])
+  @@index([startedAt])
 }

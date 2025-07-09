@@ -3,6 +3,7 @@ import { NonRetriableError } from "inngest";
 import { createRedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
+import { Prisma } from "@prisma/client";
 import { 
   checkRedditPostDuplication, 
   checkOpportunityDuplication, 
@@ -10,6 +11,7 @@ import {
 } from "../lib/deduplication";
 import { clusteringEngine } from "../lib/semantic-clustering";
 import { batchAnalyzeOpportunities, BatchAnalysisRequest, processBatchResults } from "../lib/batch-ai";
+import { redditUserScraper } from "../lib/reddit-user-scraper";
 
 export const scrapeSubreddit = inngest.createFunction(
   { 
@@ -1944,6 +1946,484 @@ export const processUnprocessedPosts = inngest.createFunction(
     console.log(`[PROCESS_UNPROCESSED] Processing completed: ${finalResults.batchesTriggered} batches triggered for ${finalResults.totalUnprocessedFound} unprocessed posts`);
     
     return finalResults;
+  }
+);
+
+// User Activity Scraping Functions
+
+export const scrapeUserActivity = inngest.createFunction(
+  {
+    id: "scrape-user-activity",
+    retries: 2,
+    rateLimit: {
+      limit: 10,
+      period: "1m"
+    }
+  },
+  { event: "reddit/scrape.user-activity" },
+  async ({ event, step }) => {
+    const { username, scrapeType = 'full', limit, timeframe = 'all' } = event.data;
+    console.log(`[USER_SCRAPE] Starting user activity scraping for u/${username}`);
+
+    // Step 1: Get or create user record
+    const user = await step.run("get-or-create-user", async () => {
+      let existingUser = await prisma.redditUser.findUnique({
+        where: { username },
+      });
+
+      if (!existingUser) {
+        // Fetch user profile first
+        try {
+          const profile = await redditUserScraper.fetchUserProfile(username);
+          existingUser = await prisma.redditUser.create({
+            data: {
+              username,
+              profileData: profile as unknown as Prisma.InputJsonValue,
+              accountCreated: new Date(profile.created * 1000),
+              linkKarma: profile.link_karma,
+              commentKarma: profile.comment_karma,
+              totalKarma: profile.total_karma,
+              scrapingStatus: 'in_progress',
+              scrapingStarted: new Date(),
+            },
+          });
+        } catch (error) {
+          console.error(`[USER_SCRAPE] Error fetching profile for u/${username}:`, error);
+          throw new NonRetriableError(`User u/${username} not found or inaccessible`);
+        }
+      }
+
+      // Update scraping job with user ID
+      await prisma.userScrapingJob.updateMany({
+        where: { username, status: 'in_progress' },
+        data: { userId: existingUser.id },
+      });
+
+      return existingUser;
+    });
+
+    try {
+      // Step 2: Scrape posts
+      const postsResult = await step.run("scrape-posts", async () => {
+        if (scrapeType === 'comments_only') {
+          return { newPosts: 0, duplicatesSkipped: 0 };
+        }
+
+        console.log(`[USER_SCRAPE] Scraping posts for u/${username}`);
+        
+        let totalNewPosts = 0;
+        let totalDuplicatesSkipped = 0;
+
+        const posts = await redditUserScraper.fetchAllUserPosts(username, {
+          maxPosts: limit || 1000,
+          sort: 'new',
+          t: timeframe as 'all' | 'year' | 'month' | 'week' | 'day',
+          onProgress: (progress) => {
+            console.log(`[USER_SCRAPE] Posts progress: ${progress.fetched}/${progress.total || 'unknown'}`);
+          }
+        });
+
+        console.log(`[USER_SCRAPE] Found ${posts.length} posts to process`);
+
+        // Process posts in batches
+        const batchSize = 50;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = posts.slice(i, i + batchSize);
+          
+          for (const post of batch) {
+            try {
+              // Check if post already exists
+              const existing = await prisma.redditUserPost.findUnique({
+                where: { redditId: post.id },
+              });
+
+              if (existing) {
+                totalDuplicatesSkipped++;
+                continue;
+              }
+
+              // Create new post
+              await prisma.redditUserPost.create({
+                data: {
+                  userId: user.id,
+                  redditId: post.id,
+                  title: post.title,
+                  content: post.selftext || null,
+                  url: post.url,
+                  permalink: post.permalink,
+                  subreddit: post.subreddit,
+                  author: post.author,
+                  score: post.score,
+                  upvotes: post.ups,
+                  downvotes: post.downs,
+                  numComments: post.num_comments,
+                  createdUtc: new Date(post.created_utc * 1000),
+                  isVideo: post.is_video,
+                  isImage: !!post.post_hint?.includes('image'),
+                  isLink: !post.is_self,
+                  isSelf: post.is_self,
+                  over18: post.over_18,
+                  spoiler: post.spoiler,
+                  locked: post.locked,
+                  stickied: post.stickied,
+                  rawData: post as unknown as Prisma.InputJsonValue,
+                },
+              });
+
+              totalNewPosts++;
+            } catch (error) {
+              console.error(`[USER_SCRAPE] Error processing post ${post.id}:`, error);
+            }
+          }
+        }
+
+        return { newPosts: totalNewPosts, duplicatesSkipped: totalDuplicatesSkipped };
+      });
+
+      // Step 3: Scrape comments
+      const commentsResult = await step.run("scrape-comments", async () => {
+        if (scrapeType === 'posts_only') {
+          return { newComments: 0, duplicatesSkipped: 0 };
+        }
+
+        console.log(`[USER_SCRAPE] Scraping comments for u/${username}`);
+        
+        let totalNewComments = 0;
+        let totalDuplicatesSkipped = 0;
+
+        const comments = await redditUserScraper.fetchAllUserComments(username, {
+          maxComments: limit || 1000,
+          sort: 'new',
+          t: timeframe as 'all' | 'year' | 'month' | 'week' | 'day',
+          onProgress: (progress) => {
+            console.log(`[USER_SCRAPE] Comments progress: ${progress.fetched}/${progress.total || 'unknown'}`);
+          }
+        });
+
+        console.log(`[USER_SCRAPE] Found ${comments.length} comments to process`);
+
+        // Process comments in batches
+        const batchSize = 50;
+        for (let i = 0; i < comments.length; i += batchSize) {
+          const batch = comments.slice(i, i + batchSize);
+          
+          for (const comment of batch) {
+            try {
+              // Check if comment already exists
+              const existing = await prisma.redditUserComment.findUnique({
+                where: { redditId: comment.id },
+              });
+
+              if (existing) {
+                totalDuplicatesSkipped++;
+                continue;
+              }
+
+              // Create new comment
+              await prisma.redditUserComment.create({
+                data: {
+                  userId: user.id,
+                  redditId: comment.id,
+                  body: comment.body,
+                  permalink: comment.permalink,
+                  subreddit: comment.subreddit,
+                  author: comment.author,
+                  score: comment.score,
+                  createdUtc: new Date(comment.created_utc * 1000),
+                  postId: comment.link_id.replace('t3_', ''), // Remove prefix
+                  postTitle: comment.link_title,
+                  parentId: comment.parent_id,
+                  isTopLevel: comment.parent_id.startsWith('t3_'), // Top level if parent is post
+                  isSubmitter: comment.is_submitter,
+                  scoreHidden: comment.score_hidden,
+                  edited: !!comment.edited,
+                  rawData: comment as unknown as Prisma.InputJsonValue,
+                },
+              });
+
+              totalNewComments++;
+            } catch (error) {
+              console.error(`[USER_SCRAPE] Error processing comment ${comment.id}:`, error);
+            }
+          }
+        }
+
+        return { newComments: totalNewComments, duplicatesSkipped: totalDuplicatesSkipped };
+      });
+
+      // Step 4: Update user and job status
+      await step.run("update-completion-status", async () => {
+        await prisma.redditUser.update({
+          where: { id: user.id },
+          data: {
+            scrapingStatus: 'completed',
+            scrapingCompleted: new Date(),
+            lastScraped: new Date(),
+            postsScraped: { increment: postsResult.newPosts },
+            commentsScraped: { increment: commentsResult.newComments },
+            scrapingError: null,
+          },
+        });
+
+        await prisma.userScrapingJob.updateMany({
+          where: { userId: user.id, status: 'in_progress' },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            newPosts: postsResult.newPosts,
+            newComments: commentsResult.newComments,
+            duplicatesSkipped: postsResult.duplicatesSkipped + commentsResult.duplicatesSkipped,
+          },
+        });
+      });
+
+      console.log(`[USER_SCRAPE] Completed scraping for u/${username}`);
+      return {
+        username,
+        postsResult,
+        commentsResult,
+        success: true,
+      };
+
+    } catch (error) {
+      // Step 5: Handle errors
+      await step.run("handle-error", async () => {
+        await prisma.redditUser.update({
+          where: { id: user.id },
+          data: {
+            scrapingStatus: 'failed',
+            scrapingCompleted: new Date(),
+            scrapingError: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+
+        await prisma.userScrapingJob.updateMany({
+          where: { userId: user.id, status: 'in_progress' },
+          data: {
+            status: 'failed',
+            completedAt: new Date(),
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      });
+
+      console.error(`[USER_SCRAPE] Failed scraping for u/${username}:`, error);
+      throw error;
+    }
+  }
+);
+
+export const analyzeUserActivity = inngest.createFunction(
+  {
+    id: "analyze-user-activity",
+    retries: 2,
+    rateLimit: {
+      limit: 5,
+      period: "1m"
+    }
+  },
+  { event: "reddit/analyze.user-activity" },
+  async ({ event, step }) => {
+    const { username, userId, limit } = event.data;
+    console.log(`[USER_ANALYSIS] Starting analysis for u/${username}`);
+
+    // Step 1: Get user and items to analyze
+    const analysisData = await step.run("get-analysis-data", async () => {
+      const user = await prisma.redditUser.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NonRetriableError(`User not found: ${userId}`);
+      }
+
+      // Get unanalyzed comments
+      const comments = await prisma.redditUserComment.findMany({
+        where: { 
+          userId: user.id,
+          analyzed: false,
+          body: { not: { in: ['[deleted]', '[removed]'] } },
+        },
+        orderBy: { createdUtc: 'desc' },
+        take: limit || 1000,
+      });
+
+      console.log(`[USER_ANALYSIS] Found ${comments.length} comments to analyze`);
+      return { user, comments };
+    });
+
+    try {
+      // Step 2: Analyze comments for opportunities
+      const analysisResults = await step.run("analyze-comments", async () => {
+        const { comments } = analysisData;
+        
+        if (comments.length === 0) {
+          return { opportunitiesFound: 0, commentsAnalyzed: 0 };
+        }
+
+        const analyzer = new Delta4Analyzer(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+        let opportunitiesFound = 0;
+        let commentsAnalyzed = 0;
+
+        // Analyze comments in batches
+        const batchSize = 10;
+        for (let i = 0; i < comments.length; i += batchSize) {
+          const batch = comments.slice(i, i + batchSize);
+          
+          for (const comment of batch) {
+            try {
+              // Analyze comment for opportunities
+              const analysis = await analyzer.analyzeOpportunity({
+                postTitle: `Comment by u/${comment.author} in r/${comment.subreddit}`,
+                postContent: comment.body,
+                subreddit: comment.subreddit,
+                author: comment.author,
+                score: comment.score,
+                numComments: 0,
+              });
+
+              // Update comment analysis status
+              await prisma.redditUserComment.update({
+                where: { id: comment.id },
+                data: {
+                  analyzed: true,
+                  analysisDate: new Date(),
+                  isOpportunity: analysis.isOpportunity,
+                },
+              });
+
+              commentsAnalyzed++;
+
+              // Create opportunity if found
+              if (analysis.isOpportunity && analysis.opportunity) {
+                const opportunity = await prisma.opportunity.create({
+                  data: {
+                    title: analysis.opportunity.title,
+                    description: analysis.opportunity.description,
+                    currentSolution: analysis.opportunity.currentSolution,
+                    proposedSolution: analysis.opportunity.proposedSolution,
+                    marketContext: analysis.opportunity.marketContext,
+                    implementationNotes: analysis.opportunity.implementationNotes,
+                    
+                    // Delta 4 scores
+                    speedScore: analysis.opportunity.delta4Scores.speed,
+                    convenienceScore: analysis.opportunity.delta4Scores.convenience,
+                    trustScore: analysis.opportunity.delta4Scores.trust,
+                    priceScore: analysis.opportunity.delta4Scores.price,
+                    statusScore: analysis.opportunity.delta4Scores.status,
+                    predictabilityScore: analysis.opportunity.delta4Scores.predictability,
+                    uiUxScore: analysis.opportunity.delta4Scores.uiUx,
+                    easeOfUseScore: analysis.opportunity.delta4Scores.easeOfUse,
+                    legalFrictionScore: analysis.opportunity.delta4Scores.legalFriction,
+                    emotionalComfortScore: analysis.opportunity.delta4Scores.emotionalComfort,
+                    
+                    overallScore: analysis.opportunity.overallScore,
+                    viabilityThreshold: analysis.opportunity.viabilityThreshold,
+                    
+                    subreddit: comment.subreddit,
+                    marketSize: analysis.opportunity.marketSize,
+                    complexity: analysis.opportunity.complexity,
+                    successProbability: analysis.opportunity.successProbability,
+                    
+                    // Categories
+                    businessType: analysis.opportunity.categories.businessType,
+                    businessModel: analysis.opportunity.categories.businessModel,
+                    revenueModel: analysis.opportunity.categories.revenueModel,
+                    pricingModel: analysis.opportunity.categories.pricingModel,
+                    platform: analysis.opportunity.categories.platform,
+                    mobileSupport: analysis.opportunity.categories.mobileSupport,
+                    deploymentType: analysis.opportunity.categories.deploymentType,
+                    developmentType: analysis.opportunity.categories.developmentType,
+                    targetAudience: analysis.opportunity.categories.targetAudience,
+                    userType: analysis.opportunity.categories.userType,
+                    technicalLevel: analysis.opportunity.categories.technicalLevel,
+                    ageGroup: analysis.opportunity.categories.ageGroup,
+                    geography: analysis.opportunity.categories.geography,
+                    marketType: analysis.opportunity.categories.marketType,
+                    economicLevel: analysis.opportunity.categories.economicLevel,
+                    industryVertical: analysis.opportunity.categories.industryVertical,
+                    niche: analysis.opportunity.categories.niche,
+                    developmentComplexity: analysis.opportunity.categories.developmentComplexity,
+                    teamSize: analysis.opportunity.categories.teamSize,
+                    capitalRequirement: analysis.opportunity.categories.capitalRequirement,
+                    developmentTime: analysis.opportunity.categories.developmentTime,
+                    marketSizeCategory: analysis.opportunity.categories.marketSizeCategory,
+                    competitionLevel: analysis.opportunity.categories.competitionLevel,
+                    marketTrend: analysis.opportunity.categories.marketTrend,
+                    growthPotential: analysis.opportunity.categories.growthPotential,
+                    acquisitionStrategy: analysis.opportunity.categories.acquisitionStrategy,
+                    scalabilityType: analysis.opportunity.categories.scalabilityType,
+                    
+                    // Market validation
+                    marketValidationScore: analysis.opportunity.marketValidation.marketValidationScore,
+                    engagementLevel: analysis.opportunity.marketValidation.engagementLevel,
+                    problemFrequency: analysis.opportunity.marketValidation.problemFrequency,
+                    customerType: analysis.opportunity.marketValidation.customerType,
+                    paymentWillingness: analysis.opportunity.marketValidation.paymentWillingness,
+                    competitiveAnalysis: analysis.opportunity.marketValidation.competitiveAnalysis,
+                    validationTier: analysis.opportunity.marketValidation.validationTier,
+                  },
+                });
+
+                // Link opportunity to comment
+                await prisma.redditUserComment.update({
+                  where: { id: comment.id },
+                  data: { opportunityId: opportunity.id },
+                });
+
+                opportunitiesFound++;
+                console.log(`[USER_ANALYSIS] Found opportunity: ${opportunity.title}`);
+              }
+            } catch (error) {
+              console.error(`[USER_ANALYSIS] Error analyzing comment ${comment.id}:`, error);
+              // Mark as analyzed even if failed to prevent reprocessing
+              await prisma.redditUserComment.update({
+                where: { id: comment.id },
+                data: { analyzed: true, analysisDate: new Date() },
+              });
+            }
+          }
+        }
+
+        return { opportunitiesFound, commentsAnalyzed };
+      });
+
+      // Step 3: Update user analysis status
+      await step.run("update-analysis-status", async () => {
+        await prisma.redditUser.update({
+          where: { id: userId },
+          data: {
+            analysisStatus: 'completed',
+            analysisCompleted: new Date(),
+            opportunitiesFound: { increment: analysisResults.opportunitiesFound },
+            analysisError: null,
+          },
+        });
+      });
+
+      console.log(`[USER_ANALYSIS] Completed analysis for u/${username}`);
+      return {
+        username,
+        analysisResults,
+        success: true,
+      };
+
+    } catch (error) {
+      // Step 4: Handle errors
+      await step.run("handle-analysis-error", async () => {
+        await prisma.redditUser.update({
+          where: { id: userId },
+          data: {
+            analysisStatus: 'failed',
+            analysisCompleted: new Date(),
+            analysisError: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      });
+
+      console.error(`[USER_ANALYSIS] Failed analysis for u/${username}:`, error);
+      throw error;
+    }
   }
 );
 
