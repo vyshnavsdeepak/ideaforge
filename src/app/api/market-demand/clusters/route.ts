@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const params = querySchema.parse({
       limit: searchParams.get('limit') || '20',
-      niche: searchParams.get('niche'),
-      trending: searchParams.get('trending'),
+      niche: searchParams.get('niche') || undefined,
+      trending: searchParams.get('trending') || undefined,
     });
 
     let clusters;
