@@ -849,12 +849,12 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
       console.log(`[BATCH_AI] Starting AI analysis for ${batchRequests.length} posts`);
       
       try {
-        const results = await batchAnalyzeOpportunities(batchRequests, 8); // Process 8 posts per batch
+        const batchResponse = await batchAnalyzeOpportunities(batchRequests, 8); // Process 8 posts per batch
         
-        console.log(`[BATCH_AI] AI analysis completed with ${results.length} results`);
-        console.log(`[BATCH_AI] Results summary: ${results.map(r => `${r.id}: ${r.success ? 'success' : 'failed'}`).join(', ')}`);
+        console.log(`[BATCH_AI] AI analysis completed with ${batchResponse.results.length} results`);
+        console.log(`[BATCH_AI] Results summary: ${batchResponse.results.map(r => `${r.id}: ${r.success ? 'success' : 'failed'}`).join(', ')}`);
         
-        return results;
+        return batchResponse;
       } catch (analysisError) {
         console.error(`[BATCH_AI] Batch analysis failed:`, analysisError);
         throw new Error(`Batch AI analysis failed: ${analysisError instanceof Error ? analysisError.message : 'Unknown error'}`);
@@ -863,9 +863,9 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
 
     // Step 4: Process and store results
     const processedResults = await step.run("process-and-store-results", async () => {
-      console.log(`[BATCH_AI] Processing ${aiAnalysisResults.length} batch results`);
+      console.log(`[BATCH_AI] Processing ${aiAnalysisResults.results.length} batch results`);
       
-      const processed = processBatchResults(aiAnalysisResults);
+      const processed = processBatchResults(aiAnalysisResults.results);
       
       let successCount = 0;
       let errorCount = 0;
@@ -1020,7 +1020,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
         subreddit: inputValidation.subreddit,
         postsAnalyzed: inputValidation.totalPosts,
         batchRequestsPrepared: batchRequests.length,
-        aiAnalysisResults: aiAnalysisResults.length,
+        aiAnalysisResults: aiAnalysisResults.results.length,
         successCount: processedResults.successCount,
         errorCount: processedResults.errorCount,
         duplicateCount: processedResults.duplicateCount,
@@ -1042,7 +1042,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
     });
     
     console.log(`[BATCH_AI] Batch analysis completed successfully for r/${inputValidation.subreddit}`);
-    console.log(`[BATCH_AI] Summary: ${finalResults.successCount}/${finalResults.postsAnalyzed} opportunities created (${finalResults.executionSummary.successRate} success rate)`);
+    console.log(`[BATCH_AI] Summary: ${finalResults.successCount}/${finalResults.postsAnalyzed} opportunities created (${(finalResults.executionSummary as { successRate?: number }).successRate} success rate)`);
     
     return finalResults;
   }
@@ -1285,14 +1285,14 @@ export const megaBatchAnalyzeOpportunities = inngest.createFunction(
       numComments: post.numComments,
     }));
 
-    const results = await step.run("mega-batch-ai-analysis", async () => {
+    const batchResponse = await step.run("mega-batch-ai-analysis", async () => {
       console.log(`[MEGA_BATCH_AI] Processing ${batchRequests.length} posts in mega-batches of 10`);
       return await batchAnalyzeOpportunities(batchRequests, 10); // Process 10 posts per batch for better efficiency
     });
 
     const processedResults = await step.run("process-mega-batch-results", async () => {
-      console.log(`[MEGA_BATCH_AI] Processing ${results.length} mega-batch results`);
-      const processed = processBatchResults(results);
+      console.log(`[MEGA_BATCH_AI] Processing ${batchResponse.results.length} mega-batch results`);
+      const processed = processBatchResults(batchResponse.results);
       
       let successCount = 0;
       let errorCount = 0;

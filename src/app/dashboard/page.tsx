@@ -86,6 +86,50 @@ export default async function Dashboard() {
           </div>
         </div>
 
+        {/* AI Cost Overview */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              💰 AI Cost Overview
+            </h2>
+            <Link
+              href="/analytics/costs"
+              className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+            >
+              View detailed analytics →
+            </Link>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                📊 Today&apos;s Usage
+              </h3>
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Real-time cost tracking for all AI analysis operations
+              </p>
+            </div>
+            
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <h3 className="font-semibold text-green-900 dark:text-green-100 mb-2">
+                🎯 Cost Optimization
+              </h3>
+              <p className="text-sm text-green-800 dark:text-green-200">
+                Batch processing with 50% discount, smart model selection
+              </p>
+            </div>
+            
+            <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <h3 className="font-semibold text-purple-900 dark:text-purple-100 mb-2">
+                🔔 Cost Alerts
+              </h3>
+              <p className="text-sm text-purple-800 dark:text-purple-200">
+                Automatic notifications for budget thresholds
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Manual Controls */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8">
           <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">

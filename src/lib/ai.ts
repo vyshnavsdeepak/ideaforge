@@ -1,6 +1,8 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { analyzeSinglePostWithCostTracking } from './ai-with-cost-tracking';
+import { AIAnalysisSessionData } from './ai-cost-tracking';
 
 export interface Delta4Score {
   speed: number;
@@ -167,14 +169,56 @@ export class Delta4Analyzer {
     this.apiKey = apiKey;
   }
 
-  async analyzeOpportunity(request: AIAnalysisRequest): Promise<AIAnalysisResponse> {
+  async analyzeOpportunity(
+    request: AIAnalysisRequest,
+    options: {
+      trackCosts?: boolean;
+      redditPostId?: string;
+      sessionData?: AIAnalysisSessionData;
+    } = {}
+  ): Promise<AIAnalysisResponse & { cost?: { inputCost: number; outputCost: number; totalCost: number } }> {
     console.log(`[AI] Starting structured analysis with Vercel AI SDK and Gemini`);
     
+    const { trackCosts = false, redditPostId, sessionData } = options;
+    
     try {
-      const result = await generateObject({
-        model: google('gemini-2.5-pro'),
-        schema: opportunitySchema,
-        prompt: `
+      if (trackCosts) {
+        // Use cost tracking version
+        const { analysis, cost } = await analyzeSinglePostWithCostTracking(
+          request,
+          opportunitySchema,
+          this.buildPrompt(request),
+          {
+            model: 'gemini-2.5-pro',
+            temperature: 0.3,
+            redditPostId,
+            sessionData,
+          }
+        );
+
+        return {
+          ...this.transformAnalysis(analysis),
+          cost,
+        };
+      } else {
+        // Use original version without cost tracking
+        const result = await generateObject({
+          model: google('gemini-2.5-pro'),
+          schema: opportunitySchema,
+          prompt: this.buildPrompt(request),
+          temperature: 0.3,
+        });
+
+        return this.transformAnalysis(result.object);
+      }
+    } catch (error) {
+      console.error('Error in structured AI analysis:', error);
+      throw error;
+    }
+  }
+
+  private buildPrompt(request: AIAnalysisRequest): string {
+    return `
 You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory.
 
 **Delta 4 Theory Overview:**
@@ -207,56 +251,6 @@ For a business to be successful, it must provide a 4+ improvement delta across k
 
 **Categorization Framework:**
 You must categorize each opportunity across ALL dimensions. Use context clues, keywords, and business logic to determine the most likely category for each dimension:
-
-**Business Type:** Determine AI involvement based on solution description:
-- "AI-Powered": Core functionality relies on AI/ML (automation, predictions, NLP, computer vision)
-- "AI-Adjacent": Could benefit from AI but doesn't require it
-- "Non-AI": Traditional solution without AI components
-
-**Business Model:** Analyze target customers and value proposition:
-- "B2B": Businesses as primary customers
-- "B2C": Individual consumers as primary customers  
-- "B2B2C": Businesses selling to consumers
-
-**Revenue Model:** Infer from solution type and market:
-- "SaaS": Software subscription service
-- "Marketplace": Platform connecting buyers/sellers
-- "Service": Human-delivered service
-- "Product": One-time purchase item
-
-**Platform:** Determine optimal delivery method:
-- "Web App": Browser-based application
-- "Mobile App": iOS/Android native app
-- "Desktop App": Desktop software
-- "Hybrid": Multi-platform solution
-
-**Industry Vertical:** Map to primary industry based on problem domain:
-- Healthcare, Finance, Education, E-commerce, Marketing, Legal, Real Estate, Manufacturing, Entertainment, Gaming, Productivity, etc.
-
-**Niche:** Define the specific market niche or problem area:
-- Be specific and descriptive (e.g., "AI prompt automation for content creators", "Healthcare appointment scheduling", "Legal document automation for small firms")
-- Focus on the exact problem being solved and target user group
-- Use 2-6 words that clearly identify the market segment
-
-**Development Complexity:** Assess technical requirements:
-- "Simple": Basic CRUD, simple UI, existing APIs
-- "Medium": Custom algorithms, integrations, moderate UI
-- "Complex": Advanced AI/ML, complex workflows, high scalability needs
-
-**Target Audience:** Identify primary users:
-- "Individual Consumers": General public
-- "Small Business": <100 employees
-- "Enterprise": Large corporations
-- "Developers": Technical users
-
-**Capital Requirements:** Estimate startup costs:
-- "Low": <$50K (solo founder, simple tech)
-- "Medium": $50K-$500K (small team, moderate tech)
-- "High": >$500K (large team, complex tech, regulatory)
-
-Use scoring-based logic: analyze keywords, context, and business patterns to make intelligent categorization decisions.
-
-**Subreddit-Specific Analysis Patterns:**
 
 ${this.getSubredditSpecificPrompt(request.subreddit)}
 
@@ -291,11 +285,6 @@ ${this.getSubredditSpecificPrompt(request.subreddit)}
 
 5. **Viability Assessment:** Average score 7.4/10 → Highly viable opportunity
 
-**Anti-Pattern Examples (Not Viable Opportunities):**
-- "Anyone else hate Mondays?" (No specific problem to solve)
-- "My coffee is cold" (Problem too trivial for AI solution)
-- "Government should regulate social media" (Policy issue, not business opportunity)
-
 **Task:**
 Follow the same step-by-step approach for this Reddit post:
 
@@ -314,48 +303,54 @@ Follow the same step-by-step approach for this Reddit post:
 - Overall viability threshold is 4+ average Delta 4 score
 
 If this is a viable opportunity, provide the complete analysis with full categorization. If not, explain why in the reasons array.
-        `,
-        temperature: 0.3,
-      });
+        `;
+  }
 
-      console.log(`[AI] Structured analysis completed successfully`);
-      
-      // Transform the structured result to our expected format
-      if (!result.object.isOpportunity || !result.object.opportunity) {
-        return {
-          isOpportunity: false,
-          confidence: result.object.confidence,
-          reasons: result.object.reasons || ['No significant opportunity identified'],
-        };
-      }
-
-      const opportunity = result.object.opportunity;
-      const overallScore = this.calculateOverallScore(opportunity.delta4Scores);
-
-      return {
-        isOpportunity: true,
-        confidence: result.object.confidence,
-        opportunity: {
-          title: opportunity.title,
-          description: opportunity.description,
-          currentSolution: opportunity.currentSolution,
-          proposedSolution: opportunity.proposedSolution,
-          marketContext: opportunity.marketContext,
-          implementationNotes: opportunity.implementationNotes,
-          delta4Scores: opportunity.delta4Scores,
-          overallScore: overallScore,
-          viabilityThreshold: overallScore >= 4,
-          marketSize: opportunity.marketSize,
-          complexity: opportunity.complexity,
-          successProbability: opportunity.successProbability,
-          categories: opportunity.categories,
-          reasoning: opportunity.reasoning,
-        },
+  private transformAnalysis(analysis: {
+    isOpportunity: boolean;
+    confidence: number;
+    reasons?: string[];
+    opportunity?: {
+      delta4Scores: {
+        pain: number;
+        urgency: number;
+        reach: number;
+        impact: number;
       };
-    } catch (error) {
-      console.error('Error in structured AI analysis:', error);
-      throw error;
+      [key: string]: unknown;
+    };
+  }): AIAnalysisResponse {
+    if (!analysis.isOpportunity || !analysis.opportunity) {
+      return {
+        isOpportunity: false,
+        confidence: analysis.confidence,
+        reasons: analysis.reasons || ['No significant opportunity identified'],
+      };
     }
+
+    const opportunity = analysis.opportunity;
+    const overallScore = this.calculateOverallScore(opportunity.delta4Scores);
+
+    return {
+      isOpportunity: true,
+      confidence: analysis.confidence,
+      opportunity: {
+        title: opportunity.title,
+        description: opportunity.description,
+        currentSolution: opportunity.currentSolution,
+        proposedSolution: opportunity.proposedSolution,
+        marketContext: opportunity.marketContext,
+        implementationNotes: opportunity.implementationNotes,
+        delta4Scores: opportunity.delta4Scores,
+        overallScore: overallScore,
+        viabilityThreshold: overallScore >= 4,
+        marketSize: opportunity.marketSize,
+        complexity: opportunity.complexity,
+        successProbability: opportunity.successProbability,
+        categories: opportunity.categories,
+        reasoning: opportunity.reasoning,
+      },
+    };
   }
 
   private calculateOverallScore(scores: Delta4Score): number {

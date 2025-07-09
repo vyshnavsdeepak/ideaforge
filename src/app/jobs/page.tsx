@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { JobTriggersPanel } from '../../components/JobTriggersPanel';
+import { CostSummaryCard } from '../../components/CostAnalytics/CostSummaryCard';
+import { SessionCostTable } from '../../components/CostAnalytics/SessionCostTable';
 
 interface SystemHealth {
   database: 'online' | 'offline' | 'degraded';
@@ -247,6 +249,9 @@ export default function JobsPage() {
           </div>
         </div>
 
+        {/* AI Cost Overview */}
+        <CostSummaryCard period="24h" className="mb-8" />
+
         {/* Manual Job Controls */}
         <JobTriggersPanel className="mb-8" />
 
@@ -304,51 +309,26 @@ export default function JobsPage() {
           </div>
         </div>
 
-        {/* Recent Activity (Placeholder) */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Recent Activity
-            </h2>
-          </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-green-600 dark:text-green-400">✅</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    Completed scraping r/entrepreneur
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    5 minutes ago • 47 posts processed
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-blue-600 dark:text-blue-400">🎯</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    Generated 3 new opportunities
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    8 minutes ago • 2 marked as viable
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <span className="text-red-600 dark:text-red-400">❌</span>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                    Failed to process 2 posts
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    12 minutes ago • Rate limit exceeded
-                  </div>
-                </div>
-              </div>
+        {/* Recent AI Sessions */}
+        <SessionCostTable limit={10} className="mb-8" />
+
+        {/* Cost Analytics Link */}
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                💰 Detailed Cost Analytics
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                View comprehensive AI cost analysis, model breakdowns, and optimization recommendations
+              </p>
             </div>
+            <a
+              href="/analytics/costs"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Analytics →
+            </a>
           </div>
         </div>
 
