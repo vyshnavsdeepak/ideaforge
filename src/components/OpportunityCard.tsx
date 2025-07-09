@@ -90,9 +90,14 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-            {opportunity.title}
-          </h3>
+          <div className="flex items-center gap-3 mb-2">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              {opportunity.title}
+            </h3>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {opportunity.redditPosts?.length || 1} source{(opportunity.redditPosts?.length || 1) > 1 ? 's' : ''}
+            </span>
+          </div>
           <p className="text-gray-600 dark:text-gray-300 mb-3">
             {opportunity.description}
           </p>
@@ -268,17 +273,25 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
                         </div>
                       </div>
                     </div>
-                    {source.redditPost.permalink && (
+                    <div className="flex items-center gap-2">
                       <a
-                        href={formatRedditUrl(source.redditPost.permalink) || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        href={`/posts?search=${encodeURIComponent(source.redditPost.title)}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors"
                       >
-                        <ExternalLink className="w-3 h-3" />
-                        View
+                        📝 In DB
                       </a>
-                    )}
+                      {source.redditPost.permalink && (
+                        <a
+                          href={formatRedditUrl(source.redditPost.permalink) || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Reddit
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

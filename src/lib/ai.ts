@@ -172,7 +172,7 @@ export class Delta4Analyzer {
     
     try {
       const result = await generateObject({
-        model: google('gemini-2.0-flash-exp'),
+        model: google('gemini-2.5-pro'),
         schema: opportunitySchema,
         prompt: `
 You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory.
@@ -260,17 +260,58 @@ Use scoring-based logic: analyze keywords, context, and business patterns to mak
 
 ${this.getSubredditSpecificPrompt(request.subreddit)}
 
+**Example Analysis:**
+
+**Reddit Post:** "I spend 3 hours every day manually creating product descriptions for my e-commerce store. It's tedious and I'm not even good at writing compelling copy. Any tools that can help?"
+
+**Step-by-Step Analysis:**
+
+1. **Problem Identification:** Manual product description writing is time-consuming (3 hours daily) and produces suboptimal results
+2. **AI Solution:** AI-powered product description generator using NLP and e-commerce optimization
+3. **Delta 4 Evaluation:**
+   - Speed: 9 (3 hours → 30 minutes = 6x faster)
+   - Convenience: 8 (automated vs manual writing)
+   - Trust: 6 (AI-generated copy with human review)
+   - Price: 7 (subscription vs hiring copywriter)
+   - Status: 5 (professional-quality descriptions)
+   - Predictability: 7 (consistent output quality)
+   - UI/UX: 8 (simple input → polished output)
+   - Ease of Use: 8 (minimal learning curve)
+   - Legal Friction: 9 (no regulatory issues)
+   - Emotional Comfort: 7 (reduces daily stress)
+
+4. **Business Categorization:**
+   - Business Type: AI-Powered
+   - Revenue Model: SaaS
+   - Platform: Web App
+   - Industry: E-commerce
+   - Niche: AI copywriting for product descriptions
+   - Target Audience: Small Business
+   - Capital Requirements: Low
+
+5. **Viability Assessment:** Average score 7.4/10 → Highly viable opportunity
+
+**Anti-Pattern Examples (Not Viable Opportunities):**
+- "Anyone else hate Mondays?" (No specific problem to solve)
+- "My coffee is cold" (Problem too trivial for AI solution)
+- "Government should regulate social media" (Policy issue, not business opportunity)
+
 **Task:**
-Analyze this Reddit post for potential AI business opportunities. Determine if this post describes a genuine problem that could be solved with AI, and if so, provide a complete Delta 4 analysis AND comprehensive categorization.
+Follow the same step-by-step approach for this Reddit post:
+
+**Step 1:** Identify the core problem mentioned in the post
+**Step 2:** Suggest a potential AI-driven solution
+**Step 3:** Evaluate the solution using Delta 4 theory (provide detailed reasoning for each dimension)
+**Step 4:** Categorize the business opportunity across all dimensions
+**Step 5:** Assess overall viability and provide comprehensive analysis
 
 **Requirements:**
-- Only identify real problems with clear customer pain
-- Focus on opportunities where AI can provide substantial value
-- Consider market size and implementation feasibility
-- Prioritize problems with existing engagement/validation
-- Provide detailed reasoning for each Delta 4 dimension
+- Only identify real problems with clear customer pain points
+- Focus on opportunities where AI provides substantial (4+) improvement
+- Consider market size, implementation feasibility, and existing validation
+- Provide specific reasoning that references the Reddit post content
 - Use context clues and business logic for ALL categorizations
-- Overall viability threshold is 4+ average score
+- Overall viability threshold is 4+ average Delta 4 score
 
 If this is a viable opportunity, provide the complete analysis with full categorization. If not, explain why in the reasons array.
         `,

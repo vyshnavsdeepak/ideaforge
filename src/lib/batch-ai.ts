@@ -1,7 +1,7 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { opportunitySchema } from './ai';
+import { opportunitySchema, AIAnalysisResponse, Delta4Score } from './ai';
 
 export interface BatchAnalysisRequest {
   id: string;
@@ -18,8 +18,30 @@ export interface BatchAnalysisResult {
   id: string;
   postId: string;
   success: boolean;
-  analysis?: unknown;
+  analysis?: AIAnalysisResponse;
   error?: string;
+}
+
+function calculateOverallScore(scores: Delta4Score): number {
+  const weights = {
+    speed: 0.15,
+    convenience: 0.15,
+    trust: 0.12,
+    price: 0.1,
+    status: 0.08,
+    predictability: 0.1,
+    uiUx: 0.1,
+    easeOfUse: 0.1,
+    legalFriction: 0.05,
+    emotionalComfort: 0.05,
+  };
+
+  let weightedSum = 0;
+  Object.entries(weights).forEach(([key, weight]) => {
+    weightedSum += (scores[key as keyof Delta4Score] || 0) * weight;
+  });
+
+  return Math.round(weightedSum * 100) / 100;
 }
 
 const batchAnalysisSchema = z.object({
@@ -34,21 +56,24 @@ const batchAnalysisSchema = z.object({
         opportunity: z.object({
           title: z.string(),
           description: z.string(),
+          currentSolution: z.string().optional(),
           proposedSolution: z.string(),
           marketContext: z.string().optional(),
           implementationNotes: z.string().optional(),
           delta4Scores: z.object({
-            speed: z.number(),
-            convenience: z.number(),
-            trust: z.number(),
-            price: z.number(),
-            status: z.number(),
-            predictability: z.number(),
-            uiUx: z.number(),
-            easeOfUse: z.number(),
-            legalFriction: z.number(),
-            emotionalComfort: z.number(),
+            speed: z.number().min(0).max(10),
+            convenience: z.number().min(0).max(10),
+            trust: z.number().min(0).max(10),
+            price: z.number().min(0).max(10),
+            status: z.number().min(0).max(10),
+            predictability: z.number().min(0).max(10),
+            uiUx: z.number().min(0).max(10),
+            easeOfUse: z.number().min(0).max(10),
+            legalFriction: z.number().min(0).max(10),
+            emotionalComfort: z.number().min(0).max(10),
           }),
+          overallScore: z.number(),
+          viabilityThreshold: z.boolean(),
           marketSize: z.enum(['Small', 'Medium', 'Large', 'Unknown']),
           complexity: z.enum(['Low', 'Medium', 'High']),
           successProbability: z.enum(['Low', 'Medium', 'High']),
@@ -161,11 +186,24 @@ async function processBatch(batch: BatchAnalysisRequest[]): Promise<BatchAnalysi
   const prompt = `
 You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory.
 
-I will provide you with ${batch.length} Reddit posts to analyze. For each post, determine if it represents a genuine business opportunity and provide a detailed analysis.
+**Delta 4 Theory:** A business needs 4+ improvement delta across: Speed, Convenience, Trust, Price, Status, Predictability, UI/UX, Ease of Use, Legal Friction, Emotional Comfort (scored 0-10).
 
-IMPORTANT: Return exactly ${batch.length} analyses in the same order as the input posts. If a post doesn't contain a business opportunity, still provide an analysis but mark it appropriately.
+**Example Analysis:**
+- Reddit Post: "I spend hours manually scheduling social media posts for my clients. It's repetitive and I often forget to post at optimal times."
+- Opportunity: AI-powered social media scheduling with optimal timing
+- Delta 4 Scores: Speed: 8, Convenience: 9, Trust: 6, Price: 7, Status: 5, Predictability: 8, UI/UX: 7, Ease of Use: 8, Legal Friction: 9, Emotional Comfort: 7
+- Average: 7.4/10 → Viable opportunity
 
-Here are the posts to analyze:
+**Anti-Patterns (Not Viable):**
+- Vague complaints without specific problems
+- Problems too trivial for AI solutions
+- Policy/regulatory issues without business angle
+
+**Task:** Analyze ${batch.length} Reddit posts for AI business opportunities.
+
+**CRITICAL:** Return exactly ${batch.length} analyses in the same order as input posts.
+
+**Posts to Analyze:**
 
 ${postsData.map((post, index) => `
 POST ${index + 1}:
@@ -180,33 +218,55 @@ Comments: ${post.numComments}
 ---
 `).join('\n')}
 
+**Analysis Requirements:**
 For each post, provide:
-1. A clear business opportunity title (or "No Clear Opportunity" if none exists)
-2. Detailed analysis of the problem and solution
-3. Delta 4 scores (0-10) for all 10 dimensions
-4. Market size assessment
-5. Implementation complexity
-6. Success probability
-7. Categorization across all business dimensions
-8. Detailed reasoning for each Delta 4 score
+1. **Problem Identification:** Core issue mentioned in the post
+2. **AI Solution:** Specific AI-driven solution proposal
+3. **Delta 4 Analysis:** Score each dimension (0-10) with brief reasoning
+4. **Business Viability:** Market size, complexity, success probability
+5. **Categorization:** Business type, revenue model, platform, industry, niche, target audience, capital requirements
+6. **Overall Assessment:** Average Delta 4 score and viability conclusion
 
-Return the analyses in the exact same order as the input posts.
+**Quality Standards:**
+- Focus on clear, specific problems with customer pain
+- Ensure AI provides substantial (4+) improvement
+- Reference specific content from the Reddit post
+- Use business logic for all categorizations
+- Maintain consistent analysis depth across all posts
+
+Return analyses in the exact same order as the input posts.
 `;
 
   const result = await generateObject({
-    model: google('gemini-2.0-flash-exp'),
+    model: google('gemini-2.5-flash'),
     schema: batchAnalysisSchema,
     prompt,
-    temperature: 0.7,
+    temperature: 0.3,
   });
 
-  return result.object.analyses.map(analysis => ({
-    id: analysis.id,
-    postId: analysis.postId,
-    success: analysis.success,
-    analysis: analysis.analysis || null,
-    error: analysis.error,
-  }));
+  return result.object.analyses.map(analysis => {
+    // Transform the analysis to match AIAnalysisResponse format
+    const transformedAnalysis = analysis.analysis ? {
+      isOpportunity: analysis.analysis.isOpportunity,
+      confidence: analysis.analysis.confidence,
+      opportunity: analysis.analysis.opportunity ? {
+        ...analysis.analysis.opportunity,
+        // Calculate overall score from delta4Scores
+        overallScore: calculateOverallScore(analysis.analysis.opportunity.delta4Scores),
+        // Set viability threshold based on overall score
+        viabilityThreshold: calculateOverallScore(analysis.analysis.opportunity.delta4Scores) >= 4.0,
+      } : undefined,
+      reasons: analysis.analysis.reasons,
+    } : undefined;
+
+    return {
+      id: analysis.id,
+      postId: analysis.postId,
+      success: analysis.success,
+      analysis: transformedAnalysis,
+      error: analysis.error,
+    };
+  });
 }
 
 /**
@@ -229,17 +289,29 @@ Provide a detailed analysis including Delta 4 scores, market assessment, and imp
 `;
 
   const result = await generateObject({
-    model: google('gemini-2.0-flash-exp'),
+    model: google('gemini-2.5-pro'),
     schema: opportunitySchema,
     prompt,
-    temperature: 0.7,
+    temperature: 0.3,
   });
+
+  // Transform the analysis to match AIAnalysisResponse format
+  const transformedAnalysis = {
+    isOpportunity: result.object.isOpportunity,
+    confidence: result.object.confidence,
+    opportunity: result.object.opportunity ? {
+      ...result.object.opportunity,
+      overallScore: calculateOverallScore(result.object.opportunity.delta4Scores),
+      viabilityThreshold: calculateOverallScore(result.object.opportunity.delta4Scores) >= 4.0,
+    } : undefined,
+    reasons: result.object.reasons,
+  };
 
   return {
     id: request.id,
     postId: request.postId,
     success: true,
-    analysis: result.object
+    analysis: transformedAnalysis
   };
 }
 
@@ -249,7 +321,7 @@ Provide a detailed analysis including Delta 4 scores, market assessment, and imp
 export function processBatchResults(results: BatchAnalysisResult[]): Array<{
   postId: string;
   success: boolean;
-  analysis?: unknown;
+  analysis?: AIAnalysisResponse;
   error?: string;
 }> {
   return results.map(result => ({
