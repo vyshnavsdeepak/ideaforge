@@ -14,7 +14,7 @@ export const scrapeSubreddit = inngest.createFunction(
     id: "scrape-subreddit",
     retries: 3,
     rateLimit: {
-      limit: 30,
+      limit: 100,
       period: "1m"
     }
   },

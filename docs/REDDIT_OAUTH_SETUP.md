@@ -3,7 +3,7 @@
 ## Why Use Reddit OAuth?
 
 Using Reddit's official OAuth API provides several benefits:
-- **Higher rate limits**: 60 requests/minute vs 10 for unauthenticated
+- **Higher rate limits**: 100 requests/minute vs 10 for unauthenticated
 - **Access to private subreddits**: Some subreddits require authentication
 - **Better reliability**: Less likely to be blocked or rate limited
 - **Official support**: Reddit officially supports this approach
@@ -37,12 +37,12 @@ REDDIT_CLIENT_ID=your_client_id_here
 REDDIT_CLIENT_SECRET=your_client_secret_here
 REDDIT_USERNAME=your_reddit_username
 REDDIT_PASSWORD=your_reddit_password
-REDDIT_USER_AGENT=IdeaForge/2.0.0 (by /u/your_reddit_username)
+REDDIT_USER_AGENT=web:IdeaForge:v2.0.0 (by /u/your_reddit_username)
 ```
 
 ### Important Notes:
 - **Username/Password**: These are YOUR Reddit account credentials
-- **User Agent**: Must follow Reddit's format: `AppName/Version (by /u/username)`
+- **User Agent**: Must follow Reddit's format: `platform:AppName:version (by /u/username)`
 - **Keep secure**: Never commit these to version control
 - **Use dedicated account**: Consider creating a dedicated Reddit account for scraping
 
@@ -75,7 +75,7 @@ Look for these log messages:
 ## Step 4: Verify Higher Rate Limits
 
 With authentication, you should see:
-- **60 requests/minute** instead of 10
+- **100 requests/minute** instead of 10
 - Access to previously blocked subreddits
 - More stable scraping performance
 
@@ -87,7 +87,7 @@ REDDIT_CLIENT_ID=abc123def456
 REDDIT_CLIENT_SECRET=xyz789uvw012mno345
 REDDIT_USERNAME=your_reddit_username
 REDDIT_PASSWORD=your_reddit_password
-REDDIT_USER_AGENT=IdeaForge/2.0.0 (by /u/your_reddit_username)
+REDDIT_USER_AGENT=web:IdeaForge:v2.0.0 (by /u/your_reddit_username)
 
 # Other existing variables...
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_key
@@ -114,13 +114,13 @@ NEXTAUTH_SECRET=your_nextauth_secret
 - **Access control**: Limit who has access to production environment variables
 
 ### 4. User Agent Best Practices
-- **Format**: Always use `AppName/Version (by /u/username)` format
+- **Format**: Always use `platform:AppName:version (by /u/username)` format
 - **Descriptive**: Use a clear, descriptive app name
 - **Contact info**: Include your Reddit username for contact
 - **Version tracking**: Update version when making significant changes
 - **Examples**:
-  - `IdeaForge/2.0.0 (by /u/yourusername)`
-  - `OpportunityFinder/1.5.0 (by /u/yourusername)`
+  - `web:IdeaForge:v2.0.0 (by /u/yourusername)`
+  - `web:OpportunityFinder:v1.5.0 (by /u/yourusername)`
 
 ## Troubleshooting
 

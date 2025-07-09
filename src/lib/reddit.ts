@@ -74,7 +74,7 @@ export interface RedditAPIError extends Error {
 export class RedditClient {
   protected readonly baseUrl = 'https://www.reddit.com';
   protected readonly headers = {
-    'User-Agent': process.env.REDDIT_USER_AGENT || 'IdeaForge/2.0.0 (by /u/OpportunityBot)',
+    'User-Agent': process.env.REDDIT_USER_AGENT || 'web:IdeaForge:v2.0.0 (by /u/OpportunityBot)',
     'Accept': 'application/json',
   };
 
@@ -96,6 +96,10 @@ export class RedditClient {
       });
 
       clearTimeout(timeoutId);
+      
+      // Monitor rate limit headers
+      this.logRateLimitInfo(response, subreddit);
+      
       await this.handleResponseErrors(response, subreddit);
       
       const data: RedditResponse = await response.json();
@@ -112,6 +116,28 @@ export class RedditClient {
       }
       
       throw error;
+    }
+  }
+
+  /**
+   * Log rate limit information from Reddit API headers
+   */
+  protected logRateLimitInfo(response: Response, subreddit: string): void {
+    try {
+      const used = response.headers?.get('X-Ratelimit-Used');
+      const remaining = response.headers?.get('X-Ratelimit-Remaining');
+      const reset = response.headers?.get('X-Ratelimit-Reset');
+      
+      if (used || remaining || reset) {
+        console.log(`[REDDIT_RATE_LIMIT] r/${subreddit}: Used=${used || 'N/A'}, Remaining=${remaining || 'N/A'}, Reset=${reset || 'N/A'}`);
+        
+        // Warn if approaching rate limit
+        if (remaining && parseInt(remaining) < 10) {
+          console.warn(`[REDDIT_RATE_LIMIT] Warning: Only ${remaining} requests remaining before rate limit`);
+        }
+      }
+    } catch {
+      // Ignore errors when checking rate limit headers (e.g., in tests)
     }
   }
 
@@ -241,6 +267,9 @@ export class AuthenticatedRedditClient extends RedditClient {
     
     try {
       const response = await this.authClient.makeAuthenticatedRequest(endpoint);
+      
+      // Monitor rate limit headers for authenticated requests
+      this.logRateLimitInfo(response, subreddit);
       
       if (!response.ok) {
         // Use parent class error handling

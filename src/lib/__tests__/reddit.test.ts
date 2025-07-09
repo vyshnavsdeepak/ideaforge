@@ -319,7 +319,7 @@ describe('Reddit Client', () => {
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
-            'User-Agent': 'IdeaForge/2.0.0 (by /u/OpportunityBot)',
+            'User-Agent': 'web:IdeaForge:v2.0.0 (by /u/OpportunityBot)',
           }),
         })
       )

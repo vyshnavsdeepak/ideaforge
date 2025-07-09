@@ -173,6 +173,6 @@ export function createRedditAuthClient(): RedditAuthClient | null {
     clientSecret,
     username,
     password,
-    userAgent: userAgent || `IdeaForge/2.0.0 (by /u/${username})`,
+    userAgent: userAgent || `web:IdeaForge:v2.0.0 (by /u/${username})`,
   });
 }
