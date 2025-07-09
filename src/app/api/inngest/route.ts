@@ -3,7 +3,11 @@ import { inngest } from "../../../lib/inngest";
 import { 
   scrapeSubreddit, 
   analyzeOpportunity, 
-  dailyRedditScrape 
+  dailyRedditScrape,
+  scrapeAllSubreddits,
+  batchAnalyzeOpportunitiesFunction,
+  processUnprocessedPosts,
+  megaBatchAnalyzeOpportunities
 } from "../../../inngest/functions";
 import {
   peakActivityScraper,
@@ -21,6 +25,10 @@ export const { GET, POST, PUT } = serve({
     scrapeSubreddit,
     analyzeOpportunity,
     dailyRedditScrape,
+    scrapeAllSubreddits,
+    batchAnalyzeOpportunitiesFunction,
+    processUnprocessedPosts,
+    megaBatchAnalyzeOpportunities,
     
     // Scheduled jobs
     peakActivityScraper,

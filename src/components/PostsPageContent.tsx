@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import qs from 'qs';
 import Link from 'next/link';
@@ -77,13 +77,14 @@ interface PostsData {
 }
 
 interface PostsPageContentProps {
-  initialData: PostsData;
+  initialData?: PostsData;
 }
 
 export function PostsPageContent({ initialData }: PostsPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [data, setData] = useState<PostsData | null>(initialData || null);
   
   // Get current filter values from URL
   const currentPage = parseInt(searchParams.get('page') || '1');
@@ -95,8 +96,45 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
   const currentSortOrder = searchParams.get('sortOrder') || 'desc';
   const currentAuthor = searchParams.get('author') || '';
 
+  // Fetch data from API
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const queryParams = new URLSearchParams();
+      searchParams.forEach((value, key) => {
+        queryParams.set(key, value);
+      });
+      
+      const response = await fetch(`/api/posts?${queryParams.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch posts');
+      }
+      
+      const result = await response.json();
+      setData(result.data);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchParams]);
+
+  // Initial data fetch
+  useEffect(() => {
+    if (!initialData) {
+      fetchData();
+    }
+  }, [initialData, fetchData]);
+
+  // Fetch data when search params change
+  useEffect(() => {
+    if (initialData) {
+      fetchData();
+    }
+  }, [searchParams, initialData, fetchData]);
+
   // Navigation function that updates URL with query parameters
-  const navigateWithParams = (newParams: Record<string, string | number | undefined>) => {
+  const navigateWithParams = useCallback((newParams: Record<string, string | number | undefined>) => {
     setIsLoading(true);
     
     const currentQuery = qs.parse(searchParams.toString());
@@ -119,12 +157,8 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
 
     const queryString = qs.stringify(updatedQuery, { addQueryPrefix: true });
     router.push(`/posts${queryString}`);
-  };
+  }, [router, searchParams]);
 
-  // Reset loading state when navigation completes
-  useEffect(() => {
-    setIsLoading(false);
-  }, [initialData]);
 
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -206,25 +240,25 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {initialData.stats.total.toLocaleString()}
+              {data?.stats.total.toLocaleString() || 0}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Total Posts</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
             <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {initialData.stats.processed.toLocaleString()}
+              {data?.stats.processed.toLocaleString() || 0}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Processed</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              {initialData.stats.unprocessed.toLocaleString()}
+              {data?.stats.unprocessed.toLocaleString() || 0}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Unprocessed</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {initialData.stats.failed.toLocaleString()}
+              {data?.stats.failed.toLocaleString() || 0}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Failed</div>
           </div>
@@ -266,11 +300,11 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All Subreddits</option>
-                {initialData.subreddits.map((sub) => (
+                {data?.subreddits.map((sub) => (
                   <option key={sub.name} value={sub.name}>
                     r/{sub.name} ({sub.count})
                   </option>
-                ))}
+                )) || []}
               </select>
             </div>
 
@@ -371,7 +405,18 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
 
         {/* Posts List */}
         <div className="space-y-6">
-          {initialData.posts.map((post) => {
+          {!data && isLoading && (
+            <div className="text-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">Loading posts...</p>
+            </div>
+          )}
+          {!data && !isLoading && (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">No posts found</p>
+            </div>
+          )}
+          {data?.posts.map((post) => {
             const status = getProcessingStatus(post);
             const opportunities = getOpportunityStats(post);
             
@@ -509,19 +554,19 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 </div>
               </div>
             );
-          })}
+          }) || []}
         </div>
 
         {/* Pagination */}
-        {initialData.pagination.totalPages > 1 && (
+        {data?.pagination.totalPages && data.pagination.totalPages > 1 && (
           <div className="flex items-center justify-between mt-8">
             <div className="text-sm text-gray-700 dark:text-gray-300">
-              Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, initialData.pagination.totalCount)} of {initialData.pagination.totalCount} posts
+              Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, data?.pagination.totalCount || 0)} of {data?.pagination.totalCount || 0} posts
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigateWithParams({ page: currentPage - 1 })}
-                disabled={!initialData.pagination.hasPrev}
+                disabled={!data?.pagination.hasPrev}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -529,7 +574,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
               </button>
               
               <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, initialData.pagination.totalPages) }, (_, i) => {
+                {Array.from({ length: Math.min(5, data?.pagination.totalPages || 0) }, (_, i) => {
                   const page = i + 1;
                   const isActive = page === currentPage;
                   return (
@@ -550,7 +595,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
 
               <button
                 onClick={() => navigateWithParams({ page: currentPage + 1 })}
-                disabled={!initialData.pagination.hasNext}
+                disabled={!data?.pagination.hasNext}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
