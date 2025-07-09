@@ -74,7 +74,7 @@ export interface RedditAPIError extends Error {
 export class RedditClient {
   protected readonly baseUrl = 'https://www.reddit.com';
   protected readonly headers = {
-    'User-Agent': 'OpportunityFinder/1.0.0 (by /u/OpportunityBot)',
+    'User-Agent': process.env.REDDIT_USER_AGENT || 'IdeaForge/2.0.0 (by /u/OpportunityBot)',
     'Accept': 'application/json',
   };
 

@@ -37,10 +37,12 @@ REDDIT_CLIENT_ID=your_client_id_here
 REDDIT_CLIENT_SECRET=your_client_secret_here
 REDDIT_USERNAME=your_reddit_username
 REDDIT_PASSWORD=your_reddit_password
+REDDIT_USER_AGENT=IdeaForge/2.0.0 (by /u/your_reddit_username)
 ```
 
 ### Important Notes:
 - **Username/Password**: These are YOUR Reddit account credentials
+- **User Agent**: Must follow Reddit's format: `AppName/Version (by /u/username)`
 - **Keep secure**: Never commit these to version control
 - **Use dedicated account**: Consider creating a dedicated Reddit account for scraping
 
@@ -85,6 +87,7 @@ REDDIT_CLIENT_ID=abc123def456
 REDDIT_CLIENT_SECRET=xyz789uvw012mno345
 REDDIT_USERNAME=your_reddit_username
 REDDIT_PASSWORD=your_reddit_password
+REDDIT_USER_AGENT=IdeaForge/2.0.0 (by /u/your_reddit_username)
 
 # Other existing variables...
 GOOGLE_GENERATIVE_AI_API_KEY=your_google_ai_key
@@ -109,6 +112,15 @@ NEXTAUTH_SECRET=your_nextauth_secret
 - **Environment variables**: Never hardcode credentials
 - **Git ignore**: Ensure `.env.local` is in `.gitignore`
 - **Access control**: Limit who has access to production environment variables
+
+### 4. User Agent Best Practices
+- **Format**: Always use `AppName/Version (by /u/username)` format
+- **Descriptive**: Use a clear, descriptive app name
+- **Contact info**: Include your Reddit username for contact
+- **Version tracking**: Update version when making significant changes
+- **Examples**:
+  - `IdeaForge/2.0.0 (by /u/yourusername)`
+  - `OpportunityFinder/1.5.0 (by /u/yourusername)`
 
 ## Troubleshooting
 

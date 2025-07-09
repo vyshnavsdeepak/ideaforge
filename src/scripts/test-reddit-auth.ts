@@ -25,7 +25,15 @@ async function testRedditAuth() {
     console.log('\nSee docs/REDDIT_OAUTH_SETUP.md for detailed instructions.');
     return;
   }
-  console.log('✅ All environment variables are set\n');
+  console.log('✅ All required environment variables are set');
+  
+  // Check optional user agent
+  if (process.env.REDDIT_USER_AGENT) {
+    console.log('✅ User agent configured:', process.env.REDDIT_USER_AGENT);
+  } else {
+    console.log('ℹ️  User agent will use default format');
+  }
+  console.log('');
 
   // Test 2: Create auth client
   console.log('2. Creating Reddit auth client...');

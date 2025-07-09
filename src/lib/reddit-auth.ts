@@ -160,10 +160,11 @@ export function createRedditAuthClient(): RedditAuthClient | null {
   const clientSecret = process.env.REDDIT_CLIENT_SECRET;
   const username = process.env.REDDIT_USERNAME;
   const password = process.env.REDDIT_PASSWORD;
+  const userAgent = process.env.REDDIT_USER_AGENT;
   
   if (!clientId || !clientSecret || !username || !password) {
     console.warn('[REDDIT_AUTH] Reddit OAuth credentials not configured');
-    console.warn('[REDDIT_AUTH] Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, and REDDIT_PASSWORD in .env');
+    console.warn('[REDDIT_AUTH] Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD, and REDDIT_USER_AGENT in .env');
     return null;
   }
   
@@ -172,6 +173,6 @@ export function createRedditAuthClient(): RedditAuthClient | null {
     clientSecret,
     username,
     password,
-    userAgent: 'OpportunityFinder/2.0.0 (by /u/' + username + ')',
+    userAgent: userAgent || `IdeaForge/2.0.0 (by /u/${username})`,
   });
 }
