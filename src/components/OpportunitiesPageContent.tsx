@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import qs from 'qs';
+import { useSearchParams } from 'next/navigation';
 import { OpportunityCard } from './OpportunityCard';
 import { 
   Search, 
@@ -96,35 +95,44 @@ interface OpportunitiesPageContentProps {
 }
 
 export function OpportunitiesPageContent({ initialData }: OpportunitiesPageContentProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(!initialData);
   const [data, setData] = useState<OpportunitiesData | null>(initialData || null);
   const [showFilters, setShowFilters] = useState(false);
-  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   
-  // Get current filter values from URL
-  const currentPage = parseInt(searchParams.get('page') || '1');
-  const currentLimit = parseInt(searchParams.get('limit') || '20');
-  const currentSearch = searchParams.get('search') || '';
-  const currentSubreddit = searchParams.get('subreddit') || '';
-  const currentBusinessType = searchParams.get('businessType') || '';
-  const currentPlatform = searchParams.get('platform') || '';
-  const currentTargetAudience = searchParams.get('targetAudience') || '';
-  const currentIndustryVertical = searchParams.get('industryVertical') || '';
-  const currentNiche = searchParams.get('niche') || '';
-  const currentMinScore = parseFloat(searchParams.get('minScore') || '0');
-  const currentViability = searchParams.get('viability') || 'all';
-  const currentSortBy = searchParams.get('sortBy') || 'overallScore';
-  const currentSortOrder = searchParams.get('sortOrder') || 'desc';
+  // Filter state - managed client-side
+  const [filters, setFilters] = useState({
+    page: parseInt(searchParams.get('page') || '1'),
+    limit: parseInt(searchParams.get('limit') || '20'),
+    search: searchParams.get('search') || '',
+    subreddit: searchParams.get('subreddit') || '',
+    businessType: searchParams.get('businessType') || '',
+    platform: searchParams.get('platform') || '',
+    targetAudience: searchParams.get('targetAudience') || '',
+    industryVertical: searchParams.get('industryVertical') || '',
+    niche: searchParams.get('niche') || '',
+    minScore: parseFloat(searchParams.get('minScore') || '0'),
+    viability: searchParams.get('viability') || 'all',
+    sortBy: searchParams.get('sortBy') || 'overallScore',
+    sortOrder: searchParams.get('sortOrder') || 'desc',
+  });
+
+  // Debounced search to avoid too many API calls
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Fetch data from API
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (customFilters?: typeof filters) => {
     setIsLoading(true);
     try {
       const queryParams = new URLSearchParams();
-      searchParams.forEach((value, key) => {
-        queryParams.set(key, value);
+      const currentFilters = customFilters || filters;
+      
+      // Add non-empty filters to query params
+      Object.entries(currentFilters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1) && !(key === 'minScore' && value === 0)) {
+          queryParams.set(key, value.toString());
+        }
       });
       
       const response = await fetch(`/api/opportunities?${queryParams.toString()}`);
@@ -139,7 +147,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
     } finally {
       setIsLoading(false);
     }
-  }, [searchParams]);
+  }, [filters]);
 
   // Initial data fetch
   useEffect(() => {
@@ -148,71 +156,84 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
     }
   }, [initialData, fetchData]);
 
-  // Fetch data when search params change
-  useEffect(() => {
-    if (initialData) {
-      fetchData();
-    }
-  }, [searchParams, initialData, fetchData]);
-
-  // Navigation function that updates URL with query parameters
-  const navigateWithParams = useCallback((newParams: Record<string, string | number | undefined>) => {
-    setIsLoading(true);
+  // Update URL without navigation when filters change
+  const updateURL = useCallback((newFilters: typeof filters) => {
+    const queryParams = new URLSearchParams();
     
-    const currentQuery = qs.parse(searchParams.toString());
-    const updatedQuery = {
-      ...currentQuery,
-      ...newParams,
-    };
-
-    // Remove undefined/empty values
-    Object.keys(updatedQuery).forEach(key => {
-      if (!updatedQuery[key] || updatedQuery[key] === '' || updatedQuery[key] === 0) {
-        delete updatedQuery[key];
+    // Add non-empty filters to query params
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1) && !(key === 'minScore' && value === 0)) {
+        queryParams.set(key, value.toString());
       }
     });
+    
+    const queryString = queryParams.toString();
+    const newPath = `/opportunities${queryString ? '?' + queryString : ''}`;
+    
+    // Update URL without navigation
+    window.history.replaceState({}, '', newPath);
+  }, []);
+
+  // Update filters and fetch data
+  const updateFilters = useCallback((newFilters: Partial<typeof filters>) => {
+    const updatedFilters = {
+      ...filters,
+      ...newFilters,
+    };
 
     // Always reset to page 1 when changing filters (except for page navigation)
-    if (!('page' in newParams)) {
-      updatedQuery.page = 1;
+    if (!('page' in newFilters)) {
+      updatedFilters.page = 1;
     }
 
-    const queryString = qs.stringify(updatedQuery, { addQueryPrefix: true });
-    router.push(`/opportunities${queryString}`);
-  }, [router, searchParams]);
+    setFilters(updatedFilters);
+    updateURL(updatedFilters);
+    fetchData(updatedFilters);
+  }, [filters, updateURL, fetchData]);
 
-  // Reset loading state when navigation completes and update search input
-  useEffect(() => {
-    setSearchInput(searchParams.get('search') || '');
-  }, [searchParams]);
+  // Handle search input with debouncing
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchInput(value);
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      updateFilters({ search: value });
+    }, 500); // 500ms debounce
+    
+    setSearchTimeout(timeout);
+  }, [searchTimeout, updateFilters]);
 
-  // Debounced search effect
+  // Cleanup timeout on unmount
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchInput !== currentSearch) {
-        navigateWithParams({ search: searchInput });
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
       }
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchInput, currentSearch, navigateWithParams]);
+    };
+  }, [searchTimeout]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
-    if (currentSearch) count++;
-    if (currentSubreddit) count++;
-    if (currentBusinessType) count++;
-    if (currentPlatform) count++;
-    if (currentTargetAudience) count++;
-    if (currentIndustryVertical) count++;
-    if (currentNiche) count++;
-    if (currentMinScore > 0) count++;
-    if (currentViability !== 'all') count++;
+    if (filters.search) count++;
+    if (filters.subreddit) count++;
+    if (filters.businessType) count++;
+    if (filters.platform) count++;
+    if (filters.targetAudience) count++;
+    if (filters.industryVertical) count++;
+    if (filters.niche) count++;
+    if (filters.minScore > 0) count++;
+    if (filters.viability !== 'all') count++;
     return count;
-  }, [currentSearch, currentSubreddit, currentBusinessType, currentPlatform, currentTargetAudience, currentIndustryVertical, currentNiche, currentMinScore, currentViability]);
+  }, [filters]);
 
   const clearAllFilters = () => {
     setSearchInput('');
-    navigateWithParams({
+    updateFilters({
       search: '',
       subreddit: '',
       businessType: '',
@@ -225,10 +246,6 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
       sortBy: 'overallScore',
       sortOrder: 'desc',
     });
-  };
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchInput(e.target.value);
   };
 
   if (!data) {
@@ -298,7 +315,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                 type="text"
                 placeholder="Search opportunities, technologies, or ideas..."
                 value={searchInput}
-                onChange={handleSearchChange}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-gray-200/50 dark:border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all duration-300 hover:bg-white/90 dark:hover:bg-gray-700/90"
               />
             </div>
@@ -337,8 +354,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Subreddit
                 </label>
                 <select
-                  value={currentSubreddit}
-                  onChange={(e) => navigateWithParams({ subreddit: e.target.value })}
+                  value={filters.subreddit}
+                  onChange={(e) => updateFilters({ subreddit: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Subreddits</option>
@@ -356,8 +373,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Business Type
                 </label>
                 <select
-                  value={currentBusinessType}
-                  onChange={(e) => navigateWithParams({ businessType: e.target.value })}
+                  value={filters.businessType}
+                  onChange={(e) => updateFilters({ businessType: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Types</option>
@@ -375,8 +392,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Platform
                 </label>
                 <select
-                  value={currentPlatform}
-                  onChange={(e) => navigateWithParams({ platform: e.target.value })}
+                  value={filters.platform}
+                  onChange={(e) => updateFilters({ platform: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Platforms</option>
@@ -394,8 +411,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Target Audience
                 </label>
                 <select
-                  value={currentTargetAudience}
-                  onChange={(e) => navigateWithParams({ targetAudience: e.target.value })}
+                  value={filters.targetAudience}
+                  onChange={(e) => updateFilters({ targetAudience: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Audiences</option>
@@ -413,8 +430,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Industry
                 </label>
                 <select
-                  value={currentIndustryVertical}
-                  onChange={(e) => navigateWithParams({ industryVertical: e.target.value })}
+                  value={filters.industryVertical}
+                  onChange={(e) => updateFilters({ industryVertical: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Industries</option>
@@ -432,8 +449,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Niche
                 </label>
                 <select
-                  value={currentNiche}
-                  onChange={(e) => navigateWithParams({ niche: e.target.value })}
+                  value={filters.niche}
+                  onChange={(e) => updateFilters({ niche: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Niches</option>
@@ -448,15 +465,15 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
               {/* Min Score Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Min Score: {currentMinScore.toFixed(1)}
+                  Min Score: {filters.minScore.toFixed(1)}
                 </label>
                 <input
                   type="range"
                   min="0"
                   max="10"
                   step="0.1"
-                  value={currentMinScore}
-                  onChange={(e) => navigateWithParams({ minScore: parseFloat(e.target.value) })}
+                  value={filters.minScore}
+                  onChange={(e) => updateFilters({ minScore: parseFloat(e.target.value) })}
                   className="w-full"
                 />
               </div>
@@ -467,8 +484,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Viability
                 </label>
                 <select
-                  value={currentViability}
-                  onChange={(e) => navigateWithParams({ viability: e.target.value })}
+                  value={filters.viability}
+                  onChange={(e) => updateFilters({ viability: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="all">All Opportunities</option>
@@ -484,8 +501,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Sort by:
                 </label>
                 <select
-                  value={currentSortBy}
-                  onChange={(e) => navigateWithParams({ sortBy: e.target.value })}
+                  value={filters.sortBy}
+                  onChange={(e) => updateFilters({ sortBy: e.target.value })}
                   className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="overallScore">Overall Score</option>
@@ -501,8 +518,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Order:
                 </label>
                 <select
-                  value={currentSortOrder}
-                  onChange={(e) => navigateWithParams({ sortOrder: e.target.value })}
+                  value={filters.sortOrder}
+                  onChange={(e) => updateFilters({ sortOrder: e.target.value })}
                   className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="desc">Descending</option>
@@ -515,8 +532,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   Per page:
                 </label>
                 <select
-                  value={currentLimit}
-                  onChange={(e) => navigateWithParams({ limit: parseInt(e.target.value) })}
+                  value={filters.limit}
+                  onChange={(e) => updateFilters({ limit: parseInt(e.target.value) })}
                   className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="10">10</option>
@@ -538,18 +555,17 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
           </div>
         )}
 
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center gap-4">
-              <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
-              <span className="text-gray-900 dark:text-white">Loading opportunities...</span>
+        {/* Results with Loading Overlay */}
+        <div className="relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 z-10 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-300">Loading opportunities...</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Results */}
-        {!isLoading && (
           <div className="space-y-6">
             {/* Filter status */}
             {activeFiltersCount > 0 && (
@@ -557,9 +573,9 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-blue-800 dark:text-blue-200">
                     Showing {data.opportunities.length} of {data.pagination.totalCount} opportunities
-                    {currentSearch && ` matching "${currentSearch}"`}
-                    {currentSubreddit && ` from r/${currentSubreddit}`}
-                    {currentMinScore > 0 && ` with score ≥ ${currentMinScore}`}
+                    {filters.search && ` matching "${filters.search}"`}
+                    {filters.subreddit && ` from r/${filters.subreddit}`}
+                    {filters.minScore > 0 && ` with score ≥ ${filters.minScore}`}
                   </div>
                   <button
                     onClick={clearAllFilters}
@@ -611,12 +627,12 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
             {data.pagination.totalPages > 1 && (
               <div className="flex items-center justify-between mt-8">
                 <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, data.pagination.totalCount)} of {data.pagination.totalCount} opportunities
+                  Showing {((filters.page - 1) * filters.limit) + 1} to {Math.min(filters.page * filters.limit, data.pagination.totalCount)} of {data.pagination.totalCount} opportunities
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => navigateWithParams({ page: currentPage - 1 })}
-                    disabled={currentPage === 1}
+                    onClick={() => updateFilters({ page: filters.page - 1 })}
+                    disabled={filters.page === 1}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -626,11 +642,11 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   <div className="flex items-center gap-1">
                     {Array.from({ length: Math.min(5, data.pagination.totalPages) }, (_, i) => {
                       const page = i + 1;
-                      const isActive = page === currentPage;
+                      const isActive = page === filters.page;
                       return (
                         <button
                           key={page}
-                          onClick={() => navigateWithParams({ page })}
+                          onClick={() => updateFilters({ page })}
                           className={`px-3 py-1 text-sm font-medium rounded-md ${
                             isActive
                               ? 'bg-purple-600 text-white'
@@ -644,8 +660,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   </div>
 
                   <button
-                    onClick={() => navigateWithParams({ page: currentPage + 1 })}
-                    disabled={currentPage === data.pagination.totalPages}
+                    onClick={() => updateFilters({ page: filters.page + 1 })}
+                    disabled={filters.page === data.pagination.totalPages}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
@@ -655,7 +671,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       <style jsx>{`

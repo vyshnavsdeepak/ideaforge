@@ -1,13 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import qs from 'qs';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from './ui/Badge';
 import { 
   Search, 
-  Filter, 
   ChevronLeft, 
   ChevronRight, 
   ExternalLink, 
@@ -93,29 +91,39 @@ interface PostsPageContentProps {
 }
 
 export function PostsPageContent({ initialData }: PostsPageContentProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(!initialData);
   const [data, setData] = useState<PostsData | null>(initialData || null);
   const [analyzingComments, setAnalyzingComments] = useState<string | null>(null);
   
-  // Get current filter values from URL
-  const currentPage = parseInt(searchParams.get('page') || '1');
-  const currentLimit = parseInt(searchParams.get('limit') || '20');
-  const currentSubreddit = searchParams.get('subreddit') || '';
-  const currentStatus = searchParams.get('status') || '';
-  const currentSearch = searchParams.get('search') || '';
-  const currentSortBy = searchParams.get('sortBy') || 'createdAt';
-  const currentSortOrder = searchParams.get('sortOrder') || 'desc';
-  const currentAuthor = searchParams.get('author') || '';
+  // Filter state - managed client-side
+  const [filters, setFilters] = useState({
+    page: parseInt(searchParams.get('page') || '1'),
+    limit: parseInt(searchParams.get('limit') || '20'),
+    subreddit: searchParams.get('subreddit') || '',
+    status: searchParams.get('status') || '',
+    search: searchParams.get('search') || '',
+    sortBy: searchParams.get('sortBy') || 'createdAt',
+    sortOrder: searchParams.get('sortOrder') || 'desc',
+    author: searchParams.get('author') || '',
+  });
+
+  // Debounced search to avoid too many API calls
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Fetch data from API
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (customFilters?: typeof filters) => {
     setIsLoading(true);
     try {
       const queryParams = new URLSearchParams();
-      searchParams.forEach((value, key) => {
-        queryParams.set(key, value);
+      const currentFilters = customFilters || filters;
+      
+      // Add non-empty filters to query params
+      Object.entries(currentFilters).forEach(([key, value]) => {
+        if (value && value !== '') {
+          queryParams.set(key, value.toString());
+        }
       });
       
       const response = await fetch(`/api/posts?${queryParams.toString()}`);
@@ -130,7 +138,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [searchParams]);
+  }, [filters]);
 
   // Initial data fetch
   useEffect(() => {
@@ -139,40 +147,68 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
     }
   }, [initialData, fetchData]);
 
-  // Fetch data when search params change
-  useEffect(() => {
-    if (initialData) {
-      fetchData();
-    }
-  }, [searchParams, initialData, fetchData]);
-
-  // Navigation function that updates URL with query parameters
-  const navigateWithParams = useCallback((newParams: Record<string, string | number | undefined>) => {
-    setIsLoading(true);
+  // Update URL without navigation when filters change
+  const updateURL = useCallback((newFilters: typeof filters) => {
+    const queryParams = new URLSearchParams();
     
-    const currentQuery = qs.parse(searchParams.toString());
-    const updatedQuery = {
-      ...currentQuery,
-      ...newParams,
-    };
-
-    // Remove undefined/empty values
-    Object.keys(updatedQuery).forEach(key => {
-      if (!updatedQuery[key] || updatedQuery[key] === '') {
-        delete updatedQuery[key];
+    // Add non-empty filters to query params
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value && value !== '' && !(key === 'page' && value === 1)) {
+        queryParams.set(key, value.toString());
       }
     });
+    
+    const queryString = queryParams.toString();
+    const newPath = `/posts${queryString ? '?' + queryString : ''}`;
+    
+    // Update URL without navigation
+    window.history.replaceState({}, '', newPath);
+  }, []);
+
+  // Update filters and fetch data
+  const updateFilters = useCallback((newFilters: Partial<typeof filters>) => {
+    const updatedFilters = {
+      ...filters,
+      ...newFilters,
+    };
 
     // Always reset to page 1 when changing filters (except for page navigation)
-    if (!('page' in newParams)) {
-      updatedQuery.page = 1;
+    if (!('page' in newFilters)) {
+      updatedFilters.page = 1;
     }
 
-    const queryString = qs.stringify(updatedQuery, { addQueryPrefix: true });
-    router.push(`/posts${queryString}`);
-  }, [router, searchParams]);
+    setFilters(updatedFilters);
+    updateURL(updatedFilters);
+    fetchData(updatedFilters);
+  }, [filters, updateURL, fetchData]);
 
-  const handleAnalyzeComments = async (postId: string, permalink: string | null) => {
+  // Handle search input with debouncing
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchInput(value);
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      updateFilters({ search: value });
+    }, 300); // 300ms debounce
+    
+    setSearchTimeout(timeout);
+  }, [searchTimeout, updateFilters]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
+
+  const handleAnalyzeComments = async (postId: string, permalink: string) => {
     if (!permalink) {
       alert('No Reddit permalink available for this post');
       return;
@@ -198,617 +234,375 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
         // Refresh the posts data to show updated status
         await fetchData();
       } else {
-        alert(result.error || 'Failed to analyze comments');
+        alert(`Error: ${result.error}`);
       }
     } catch (error) {
       console.error('Error analyzing comments:', error);
-      alert('Failed to analyze comments. Please try again.');
+      alert('Failed to start comment analysis');
     } finally {
       setAnalyzingComments(null);
     }
   };
 
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const getProcessingStatus = (post: RedditPost) => {
-    if (post.processingError) {
-      return {
-        status: 'failed',
-        label: 'Failed',
-        icon: <XCircle className="w-4 h-4" />,
-        color: 'text-red-600 dark:text-red-400',
-        bgColor: 'bg-red-50 dark:bg-red-900/20',
-      };
-    }
-    if (post.processedAt) {
-      // Check if it's an opportunity or rejected
-      if (post.isOpportunity === true) {
-        return {
-          status: 'opportunity',
-          label: 'Opportunity',
-          icon: <CheckCircle className="w-4 h-4" />,
-          color: 'text-green-600 dark:text-green-400',
-          bgColor: 'bg-green-50 dark:bg-green-900/20',
-        };
-      } else if (post.isOpportunity === false) {
-        return {
-          status: 'rejected',
-          label: 'Not an Opportunity',
-          icon: <XCircle className="w-4 h-4" />,
-          color: 'text-gray-600 dark:text-gray-400',
-          bgColor: 'bg-gray-50 dark:bg-gray-900/20',
-        };
-      } else {
-        // Legacy processed posts without isOpportunity flag
-        return {
-          status: 'processed',
-          label: 'Processed',
-          icon: <CheckCircle className="w-4 h-4" />,
-          color: 'text-green-600 dark:text-green-400',
-          bgColor: 'bg-green-50 dark:bg-green-900/20',
-        };
-      }
-    }
-    
-    // Check if post was recently scraped but not yet processed
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    if (new Date(post.createdAt) > fiveMinutesAgo && !post.processedAt) {
-      return {
-        status: 'processing',
-        label: 'Processing',
-        icon: <Loader2 className="w-4 h-4 animate-spin" />,
-        color: 'text-blue-600 dark:text-blue-400',
-        bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-      };
-    }
-    
-    return {
-      status: 'unprocessed',
-      label: 'Unprocessed',
-      icon: <Clock className="w-4 h-4" />,
-      color: 'text-yellow-600 dark:text-yellow-400',
-      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
-    };
-  };
-
-  const getOpportunityStats = (post: RedditPost) => {
-    const opportunities = post.opportunitySources.map(src => src.opportunity);
-    const viableCount = opportunities.filter(opp => opp.viabilityThreshold).length;
-    return {
-      total: opportunities.length,
-      viable: viableCount,
-      avgScore: opportunities.length > 0 
-        ? opportunities.reduce((sum, opp) => sum + opp.overallScore, 0) / opportunities.length 
-        : 0,
-    };
-  };
-
   const getCommentAnalysisStatus = (post: RedditPost) => {
     const status = post.commentAnalysisStatus;
-    
     if (status === 'processing') {
       return {
         disabled: true,
         buttonText: 'Analyzing...',
         icon: <Loader2 className="w-4 h-4 animate-spin" />,
-        className: 'opacity-50 cursor-not-allowed',
+        className: 'bg-blue-500 text-white cursor-not-allowed',
       };
-    }
-    
-    if (status === 'completed') {
-      const foundCount = post.commentOpportunitiesFound || 0;
+    } else if (status === 'completed') {
       return {
         disabled: false,
-        buttonText: foundCount > 0 ? `Re-analyze (${foundCount} found)` : 'Re-analyze',
-        icon: <MessageSquare className="w-4 h-4" />,
-        className: foundCount > 0 ? 'border-green-300 text-green-700' : '',
+        buttonText: `Results (${post.commentOpportunitiesFound || 0})`,
+        icon: <CheckCircle className="w-4 h-4" />,
+        className: 'bg-green-500 text-white hover:bg-green-600',
       };
-    }
-    
-    if (status === 'failed') {
+    } else if (status === 'failed') {
       return {
         disabled: false,
-        buttonText: 'Retry Analysis',
+        buttonText: 'Retry',
+        icon: <XCircle className="w-4 h-4" />,
+        className: 'bg-red-500 text-white hover:bg-red-600',
+      };
+    } else {
+      return {
+        disabled: false,
+        buttonText: 'Analyze Comments',
         icon: <MessageSquare className="w-4 h-4" />,
-        className: 'border-red-300 text-red-700',
+        className: 'bg-blue-500 text-white hover:bg-blue-600',
       };
     }
-    
-    // Default state (not analyzed)
-    return {
-      disabled: false,
-      buttonText: 'Analyze Comments',
-      icon: <MessageSquare className="w-4 h-4" />,
-      className: '',
-    };
   };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-300">Loading Reddit posts...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Reddit Posts
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Browse and analyze Reddit posts for business opportunities
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reddit Posts</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Scraped posts from Reddit with AI analysis and opportunity detection
           </p>
         </div>
 
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {data?.stats.total.toLocaleString() || 0}
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <MessageSquare className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Posts</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {data.stats.total.toLocaleString()}
+                </p>
+              </div>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Total Posts</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {data?.stats.processed.toLocaleString() || 0}
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Processed</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {data.stats.processed.toLocaleString()}
+                </p>
+              </div>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Processed</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              {data?.stats.unprocessed.toLocaleString() || 0}
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Unprocessed</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {data.stats.unprocessed.toLocaleString()}
+                </p>
+              </div>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Unprocessed</div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow">
-            <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {data?.stats.failed.toLocaleString() || 0}
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                <AlertTriangle className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Opportunities</h3>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {(data.stats.opportunities || 0).toLocaleString()}
+                </p>
+              </div>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">Failed</div>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Search
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search posts..."
-                  value={currentSearch}
-                  onChange={(e) => navigateWithParams({ search: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* Subreddit */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Subreddit
-              </label>
-              <select
-                value={currentSubreddit}
-                onChange={(e) => navigateWithParams({ subreddit: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Subreddits</option>
-                {data?.subreddits.map((sub) => (
-                  <option key={sub.name} value={sub.name}>
-                    r/{sub.name} ({sub.count})
-                  </option>
-                )) || []}
-              </select>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Status
-              </label>
-              <select
-                value={currentStatus}
-                onChange={(e) => navigateWithParams({ status: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Status</option>
-                <option value="processed">Processed</option>
-                <option value="unprocessed">Unprocessed</option>
-                <option value="failed">Failed</option>
-                <option value="opportunity">Opportunities</option>
-                <option value="rejected">Rejected (Non-Opportunities)</option>
-              </select>
-            </div>
-
-            {/* Author */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Author
-              </label>
-              <input
-                type="text"
-                placeholder="Username"
-                value={currentAuthor}
-                onChange={(e) => navigateWithParams({ author: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Sort by:
-              </label>
-              <select
-                value={currentSortBy}
-                onChange={(e) => navigateWithParams({ sortBy: e.target.value })}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="createdAt">Date Scraped</option>
-                <option value="createdUtc">Date Posted</option>
-                <option value="score">Reddit Score</option>
-                <option value="upvotes">Upvotes</option>
-                <option value="numComments">Comments</option>
-                <option value="title">Title</option>
-                <option value="author">Author</option>
-                <option value="subreddit">Subreddit</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Order:
-              </label>
-              <select
-                value={currentSortOrder}
-                onChange={(e) => navigateWithParams({ sortOrder: e.target.value })}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="desc">Descending</option>
-                <option value="asc">Ascending</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Per page:
-              </label>
-              <select
-                value={currentLimit}
-                onChange={(e) => navigateWithParams({ limit: parseInt(e.target.value) })}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="10">10</option>
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center gap-4">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              <span className="text-gray-900 dark:text-white">Loading posts...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Posts List */}
-        <div className="space-y-6">
-          {!data && isLoading && (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">Loading posts...</p>
-            </div>
-          )}
-          {!data && !isLoading && (
-            <div className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">No posts found</p>
-            </div>
-          )}
-          {data?.posts.map((post) => {
-            const status = getProcessingStatus(post);
-            const opportunities = getOpportunityStats(post);
-            
-            return (
-              <div key={post.id} className="bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <Badge variant="outline">r/{post.subreddit}</Badge>
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${status.bgColor} ${status.color}`}>
-                          {status.icon}
-                          {status.label}
-                        </span>
-                        {opportunities.total > 0 && (
-                          <Badge variant={opportunities.viable > 0 ? "success" : "warning"}>
-                            {opportunities.total} idea{opportunities.total > 1 ? 's' : ''}
-                            {opportunities.viable > 0 && ` (${opportunities.viable} viable)`}
-                          </Badge>
-                        )}
-                      </div>
-                      <Link
-                        href={`/posts/${post.id}`}
-                        className="text-xl font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                      >
-                        {post.title}
-                      </Link>
-                      {post.content && (
-                        <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm line-clamp-2">
-                          {post.content.substring(0, 200)}...
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {post.permalink && (
-                        <a
-                          href={formatRedditUrl(post.permalink) || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Reddit
-                        </a>
-                      )}
-                      {(() => {
-                        const commentStatus = getCommentAnalysisStatus(post);
-                        return (
-                          <button
-                            onClick={() => handleAnalyzeComments(post.id, post.permalink)}
-                            disabled={analyzingComments === post.id || commentStatus.disabled}
-                            className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed ${commentStatus.className}`}
-                          >
-                            {analyzingComments === post.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              commentStatus.icon
-                            )}
-                            {analyzingComments === post.id ? 'Analyzing...' : commentStatus.buttonText}
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        <User className="w-4 h-4" />
-                        <Link
-                          href={`/posts?author=${post.author}`}
-                          className="hover:text-blue-600 dark:hover:text-blue-400"
-                        >
-                          u/{post.author}
-                        </Link>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>{formatDate(post.createdUtc)}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1">
-                        <ArrowBigUp className="w-4 h-4 text-orange-500" />
-                        <span>{post.score}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="w-4 h-4" />
-                        <span>{post.numComments}</span>
-                      </div>
-                      {opportunities.total > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-green-600 dark:text-green-400">💡</span>
-                          <span>{opportunities.avgScore.toFixed(1)}/10</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {post.processingError && (
-                    <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
-                        <div>
-                          <div className="font-medium text-red-800 dark:text-red-200 text-sm">
-                            Processing Error
-                          </div>
-                          <div className="text-red-700 dark:text-red-300 text-xs mt-1">
-                            {post.processingError}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Rejection Reasons for Non-Opportunities */}
-                  {post.isOpportunity === false && post.rejectionReasons.length > 0 && (
-                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
-                      <div className="text-sm">
-                        <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Why this is not an opportunity:
-                        </div>
-                        <ul className="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
-                          {post.rejectionReasons.map((reason, index) => (
-                            <li key={index} className="text-xs">{reason}</li>
-                          ))}
-                        </ul>
-                        {post.aiConfidence !== null && (
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                            AI Confidence: {(post.aiConfidence * 100).toFixed(0)}%
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Comment Analysis Status */}
-                  {post.commentAnalysisStatus && (
-                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                      <div className="text-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                          {post.commentAnalysisStatus === 'processing' && (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                              <span className="font-medium text-blue-800 dark:text-blue-200">
-                                Analyzing Comments...
-                              </span>
-                            </>
-                          )}
-                          {post.commentAnalysisStatus === 'completed' && (
-                            <>
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                              <span className="font-medium text-green-800 dark:text-green-200">
-                                Comments Analysis Complete
-                              </span>
-                            </>
-                          )}
-                          {post.commentAnalysisStatus === 'failed' && (
-                            <>
-                              <XCircle className="w-4 h-4 text-red-600" />
-                              <span className="font-medium text-red-800 dark:text-red-200">
-                                Comments Analysis Failed
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        
-                        {post.commentAnalysisStatus === 'completed' && (
-                          <div className="text-blue-700 dark:text-blue-300 text-xs">
-                            Found {post.commentOpportunitiesFound || 0} opportunities in comments
-                          </div>
-                        )}
-                        
-                        {post.commentAnalysisError && (
-                          <div className="text-red-700 dark:text-red-300 text-xs mt-1">
-                            {post.commentAnalysisError}
-                          </div>
-                        )}
-                        
-                        {post.commentAnalysisStarted && (
-                          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
-                            Started: {formatDate(post.commentAnalysisStarted)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Generated Opportunities Preview */}
-                  {opportunities.total > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Generated Opportunities
-                        </span>
-                        <Link
-                          href={`/posts/${post.id}`}
-                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          View all {opportunities.total}
-                        </Link>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {post.opportunitySources.slice(0, 3).map((source) => (
-                          <Link
-                            key={source.id}
-                            href={`/opportunities/${source.opportunity.id}`}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40"
-                          >
-                            {source.opportunity.viabilityThreshold && (
-                              <span className="text-green-600 dark:text-green-400">✅</span>
-                            )}
-                            {source.sourceType === 'comment' && (
-                              <span className="text-purple-600 dark:text-purple-400" title="From comments">💬</span>
-                            )}
-                            {source.opportunity.title}
-                            <span className="text-blue-500 dark:text-blue-400">
-                              ({source.opportunity.overallScore.toFixed(1)})
-                            </span>
-                          </Link>
-                        ))}
-                        {opportunities.total > 3 && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            +{opportunities.total - 3} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
+          <div className="p-6">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search */}
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    placeholder="Search posts..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  />
                 </div>
               </div>
-            );
-          }) || []}
-        </div>
 
-        {/* Pagination */}
-        {data?.pagination.totalPages && data.pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between mt-8">
-            <div className="text-sm text-gray-700 dark:text-gray-300">
-              Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, data?.pagination.totalCount || 0)} of {data?.pagination.totalCount || 0} posts
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateWithParams({ page: currentPage - 1 })}
-                disabled={!data?.pagination.hasPrev}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-              
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, data?.pagination.totalPages || 0) }, (_, i) => {
-                  const page = i + 1;
-                  const isActive = page === currentPage;
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => navigateWithParams({ page })}
-                      className={`px-3 py-1 text-sm font-medium rounded-md ${
-                        isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
+              {/* Filters */}
+              <div className="flex flex-wrap gap-4">
+                <select
+                  value={filters.subreddit}
+                  onChange={(e) => updateFilters({ subreddit: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="">All Subreddits</option>
+                  {data.subreddits.map(sub => (
+                    <option key={sub.name} value={sub.name}>
+                      r/{sub.name} ({sub.count})
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={filters.status}
+                  onChange={(e) => updateFilters({ status: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="">All Status</option>
+                  <option value="processed">Processed</option>
+                  <option value="unprocessed">Unprocessed</option>
+                  <option value="failed">Failed</option>
+                  <option value="opportunity">Opportunities</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => updateFilters({ sortBy: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="createdAt">Created Date</option>
+                  <option value="createdUtc">Reddit Date</option>
+                  <option value="score">Score</option>
+                  <option value="numComments">Comments</option>
+                </select>
+
+                <select
+                  value={filters.sortOrder}
+                  onChange={(e) => updateFilters({ sortOrder: e.target.value })}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                >
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
               </div>
-
-              <button
-                onClick={() => navigateWithParams({ page: currentPage + 1 })}
-                disabled={!data?.pagination.hasNext}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
             </div>
           </div>
-        )}
+        </div>
+
+        {/* Content Area with Loading State */}
+        <div className="relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 z-10 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-300">Loading posts...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Posts Grid */}
+          <div className="grid grid-cols-1 gap-6 mb-8">
+            {data.posts.map((post) => {
+              const analysisStatus = getCommentAnalysisStatus(post);
+              
+              return (
+                <div key={post.id} className="bg-white dark:bg-gray-800 rounded-lg shadow">
+                  <div className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Badge variant="outline">r/{post.subreddit}</Badge>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <User className="w-4 h-4 inline mr-1" />
+                            u/{post.author}
+                          </span>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <Calendar className="w-4 h-4 inline mr-1" />
+                            {formatDate(post.createdUtc)}
+                          </span>
+                        </div>
+
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                          <Link
+                            href={`/posts/${post.id}`}
+                            className="hover:text-blue-600 dark:hover:text-blue-400"
+                          >
+                            {post.title}
+                          </Link>
+                        </h3>
+
+                        {post.content && (
+                          <p className="text-gray-600 dark:text-gray-400 mb-4 line-clamp-3">
+                            {post.content}
+                          </p>
+                        )}
+
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                          <span className="flex items-center">
+                            <ArrowBigUp className="w-4 h-4 mr-1" />
+                            {post.score}
+                          </span>
+                          <span className="flex items-center">
+                            <MessageSquare className="w-4 h-4 mr-1" />
+                            {post.numComments} comments
+                          </span>
+                          {post.permalink && (
+                            <a
+                              href={formatRedditUrl(post.permalink) || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              Reddit
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col space-y-2 ml-4">
+                        {/* Processing Status */}
+                        {post.isOpportunity === true && (
+                          <Badge variant="success">Opportunity</Badge>
+                        )}
+                        {post.isOpportunity === false && (
+                          <Badge variant="error">Rejected</Badge>
+                        )}
+                        {post.isOpportunity === null && (
+                          <Badge variant="default">Unprocessed</Badge>
+                        )}
+
+                        {/* Comment Analysis Button */}
+                        <button
+                          onClick={() => handleAnalyzeComments(post.id, post.permalink || '')}
+                          disabled={analysisStatus.disabled || analyzingComments === post.id}
+                          className={`px-3 py-1 rounded-md text-sm font-medium flex items-center space-x-2 ${analysisStatus.className}`}
+                        >
+                          {analyzingComments === post.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            analysisStatus.icon
+                          )}
+                          <span>{analysisStatus.buttonText}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Opportunity Details */}
+                    {post.opportunitySources && post.opportunitySources.length > 0 && (
+                      <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
+                          Opportunities Found:
+                        </h4>
+                        <div className="space-y-2">
+                          {post.opportunitySources.map((source) => (
+                            <div key={source.id} className="flex items-center justify-between">
+                              <Link
+                                href={`/opportunities/${source.opportunity.id}`}
+                                className="text-sm text-green-700 dark:text-green-300 hover:underline"
+                              >
+                                {source.opportunity.title}
+                              </Link>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm text-green-600 dark:text-green-400">
+                                  Score: {source.opportunity.overallScore}
+                                </span>
+                                <Badge variant={source.opportunity.viabilityThreshold ? "success" : "default"}>
+                                  {source.opportunity.viabilityThreshold ? "Viable" : "Monitor"}
+                                </Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination */}
+          {data.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
+                  disabled={!data.pagination.hasPrev}
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </button>
+                <button
+                  onClick={() => updateFilters({ page: filters.page + 1 })}
+                  disabled={!data.pagination.hasNext}
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Page {data.pagination.page} of {data.pagination.totalPages}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  ({data.pagination.totalCount} total posts)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
