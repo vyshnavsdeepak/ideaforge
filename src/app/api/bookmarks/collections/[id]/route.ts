@@ -14,8 +14,9 @@ const updateCollectionSchema = z.object({
 // Get a specific collection by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -32,7 +33,7 @@ export async function GET(
 
     const collection = await prisma.bookmarkCollection.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
       include: {
@@ -77,8 +78,9 @@ export async function GET(
 // Update a collection
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -99,7 +101,7 @@ export async function PUT(
     // Check if collection exists and belongs to user
     const existingCollection = await prisma.bookmarkCollection.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
     });
@@ -128,7 +130,7 @@ export async function PUT(
     }
 
     const updatedCollection = await prisma.bookmarkCollection.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         name: validatedData.name,
         description: validatedData.description,
@@ -163,8 +165,9 @@ export async function PUT(
 // Delete a collection
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -182,7 +185,7 @@ export async function DELETE(
     // Check if collection exists and belongs to user
     const existingCollection = await prisma.bookmarkCollection.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
     });
@@ -193,7 +196,7 @@ export async function DELETE(
 
     // Delete the collection (bookmarks will be cascade deleted)
     await prisma.bookmarkCollection.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Collection deleted successfully' });

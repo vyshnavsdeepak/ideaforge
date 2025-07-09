@@ -13,8 +13,9 @@ const updateBookmarkSchema = z.object({
 // Get a specific bookmark by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -31,7 +32,7 @@ export async function GET(
 
     const bookmark = await prisma.opportunityBookmark.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
       include: {
@@ -76,8 +77,9 @@ export async function GET(
 // Update a bookmark
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -98,7 +100,7 @@ export async function PUT(
     // Check if bookmark exists and belongs to user
     const existingBookmark = await prisma.opportunityBookmark.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
     });
@@ -108,7 +110,7 @@ export async function PUT(
     }
 
     const updatedBookmark = await prisma.opportunityBookmark.update({
-      where: { id: params.id },
+      where: { id: id },
       data: {
         notes: validatedData.notes,
         rating: validatedData.rating,
@@ -160,8 +162,9 @@ export async function PUT(
 // Delete a bookmark
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession();
     if (!session?.user?.email) {
@@ -179,7 +182,7 @@ export async function DELETE(
     // Check if bookmark exists and belongs to user
     const existingBookmark = await prisma.opportunityBookmark.findFirst({
       where: { 
-        id: params.id,
+        id: id,
         userId: user.id,
       },
     });
@@ -190,7 +193,7 @@ export async function DELETE(
 
     // Delete the bookmark
     await prisma.opportunityBookmark.delete({
-      where: { id: params.id },
+      where: { id: id },
     });
 
     return NextResponse.json({ message: 'Bookmark deleted successfully' });
