@@ -16,7 +16,7 @@ const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊', description: 'Overview & Controls' },
   { name: 'Reddit Posts', href: '/posts', icon: '📝', description: 'Raw Reddit Data' },
   { name: 'Opportunities', href: '/opportunities', icon: '🎯', description: 'AI-Generated Ideas' },
-  { name: 'Market Demand', href: '/market-demand', icon: '📈', description: 'Trend Analysis' },
+  { name: 'Market Intelligence', href: '/market-intelligence', icon: '📈', description: 'Demand Trends' },
   { name: 'Jobs & Status', href: '/jobs', icon: '⚡', description: 'System Monitoring' },
 ];
 

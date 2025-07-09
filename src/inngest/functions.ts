@@ -589,6 +589,37 @@ export const analyzeOpportunity = inngest.createFunction(
   }
 );
 
+export const dailyMarketDemandAnalysis = inngest.createFunction(
+  { 
+    id: "daily-market-demand-analysis",
+    concurrency: {
+      limit: 1
+    }
+  },
+  { cron: "0 10 * * *" }, // Run at 10 AM UTC daily
+  async ({ step }) => {
+    const results = await step.run("trigger-market-demand-analysis", async () => {
+      console.log(`[DAILY_MARKET_DEMAND] Triggering daily market demand analysis`);
+      
+      const event = await inngest.send({
+        name: "market/analyze.demands",
+        data: {
+          triggeredBy: "scheduled",
+          timestamp: new Date().toISOString(),
+        }
+      });
+      
+      return { 
+        analysisTriggered: true,
+        eventId: event.ids[0]
+      };
+    });
+
+    console.log(`[DAILY_MARKET_DEMAND] Daily market demand analysis triggered:`, results);
+    return results;
+  }
+);
+
 export const dailyRedditScrape = inngest.createFunction(
   { 
     id: "daily-reddit-scrape",
@@ -1213,6 +1244,249 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
     return finalResults;
   }
 );
+
+export const analyzeMarketDemands = inngest.createFunction(
+  { 
+    id: "analyze-market-demands",
+    retries: 2,
+  },
+  { event: "market/analyze.demands" },
+  async ({ step }) => {
+    console.log(`[MARKET_DEMAND] Starting market demand analysis`);
+
+    // Step 1: Aggregate similar niches
+    const nicheAnalysis = await step.run("aggregate-similar-niches", async () => {
+      // Get all opportunities with their niches
+      const opportunities = await prisma.opportunity.findMany({
+        select: {
+          id: true,
+          niche: true,
+          title: true,
+          description: true,
+          proposedSolution: true,
+          overallScore: true,
+          viabilityThreshold: true,
+          subreddit: true,
+          createdAt: true,
+        },
+        where: {
+          AND: [
+            { niche: { not: null } },
+            { niche: { not: "Unknown" } },
+          ],
+        },
+      });
+
+      console.log(`[MARKET_DEMAND] Found ${opportunities.length} opportunities with niches`);
+
+      // Group opportunities by similar niches
+      const nicheGroups: Record<string, typeof opportunities> = {};
+      
+      opportunities.forEach(opp => {
+        const niche = opp.niche || 'Unknown';
+        if (!nicheGroups[niche]) {
+          nicheGroups[niche] = [];
+        }
+        nicheGroups[niche].push(opp);
+      });
+
+      // Convert to array and sort by count
+      const sortedNiches = Object.entries(nicheGroups)
+        .map(([niche, opps]) => ({
+          niche,
+          opportunities: opps,
+          count: opps.length,
+          avgScore: opps.reduce((sum, o) => sum + o.overallScore, 0) / opps.length,
+          viableCount: opps.filter(o => o.viabilityThreshold).length,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      console.log(`[MARKET_DEMAND] Found ${sortedNiches.length} unique niches`);
+      console.log(`[MARKET_DEMAND] Top 5 niches:`, sortedNiches.slice(0, 5).map(n => `${n.niche} (${n.count})`));
+
+      return sortedNiches;
+    });
+
+    // Step 2: Extract common demand patterns
+    const demandPatterns = await step.run("extract-demand-patterns", async () => {
+      const patterns: Array<{
+        pattern: string;
+        niche: string;
+        occurrences: Array<{
+          opportunityId: string;
+          title: string;
+          subreddit: string;
+        }>;
+      }> = [];
+
+      // For each niche group, analyze common patterns
+      for (const nicheGroup of nicheAnalysis.slice(0, 20)) { // Process top 20 niches
+        // Extract common keywords from titles and descriptions
+        const commonPhrases = extractCommonPhrases(
+          nicheGroup.opportunities.map(o => `${o.title} ${o.description}`)
+        );
+
+        for (const phrase of commonPhrases.slice(0, 3)) { // Top 3 phrases per niche
+          patterns.push({
+            pattern: phrase,
+            niche: nicheGroup.niche,
+            occurrences: nicheGroup.opportunities
+              .filter(o => 
+                o.title.toLowerCase().includes(phrase.toLowerCase()) || 
+                o.description.toLowerCase().includes(phrase.toLowerCase())
+              )
+              .map(o => ({
+                opportunityId: o.id,
+                title: o.title,
+                subreddit: o.subreddit,
+              })),
+          });
+        }
+      }
+
+      console.log(`[MARKET_DEMAND] Extracted ${patterns.length} demand patterns`);
+      return patterns;
+    });
+
+    // Step 3: Update market demand clusters
+    const clusterResults = await step.run("update-market-clusters", async () => {
+      let updatedClusters = 0;
+      let newClusters = 0;
+
+      for (const pattern of demandPatterns) {
+        if (pattern.occurrences.length < 2) continue; // Skip patterns with only 1 occurrence
+
+        // Check if cluster already exists
+        const existingCluster = await prisma.marketDemandCluster.findFirst({
+          where: {
+            niche: pattern.niche,
+            demandSignal: pattern.pattern,
+          },
+        });
+
+        if (existingCluster) {
+          // Update existing cluster
+          await prisma.marketDemandCluster.update({
+            where: { id: existingCluster.id },
+            data: {
+              occurrenceCount: pattern.occurrences.length,
+              lastSeen: new Date(),
+              subreddits: Array.from(new Set(pattern.occurrences.map(o => o.subreddit))),
+            },
+          });
+          updatedClusters++;
+
+          // Update opportunity associations
+          // First, remove old associations
+          await prisma.marketDemandOpportunity.deleteMany({
+            where: { clusterId: existingCluster.id },
+          });
+
+          // Then create new ones
+          for (const occ of pattern.occurrences) {
+            await prisma.marketDemandOpportunity.create({
+              data: {
+                clusterId: existingCluster.id,
+                opportunityId: occ.opportunityId,
+              },
+            });
+          }
+        } else {
+          // Create new cluster
+          const newCluster = await prisma.marketDemandCluster.create({
+            data: {
+              niche: pattern.niche,
+              demandSignal: pattern.pattern,
+              occurrenceCount: pattern.occurrences.length,
+              subreddits: Array.from(new Set(pattern.occurrences.map(o => o.subreddit))),
+              embedding: [], // Would need to generate embeddings in a real implementation
+            },
+          });
+          newClusters++;
+
+          // Create opportunity associations
+          for (const occ of pattern.occurrences) {
+            await prisma.marketDemandOpportunity.create({
+              data: {
+                clusterId: newCluster.id,
+                opportunityId: occ.opportunityId,
+              },
+            });
+          }
+        }
+      }
+
+      console.log(`[MARKET_DEMAND] Updated ${updatedClusters} clusters, created ${newClusters} new clusters`);
+      return { updatedClusters, newClusters };
+    });
+
+    // Step 4: Clean up old clusters
+    const cleanupResults = await step.run("cleanup-old-clusters", async () => {
+      // Remove clusters that haven't been seen in 60 days
+      const sixtyDaysAgo = new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+      const deletedClusters = await prisma.marketDemandCluster.deleteMany({
+        where: {
+          lastSeen: { lt: sixtyDaysAgo },
+          occurrenceCount: { lt: 3 }, // Only delete if low occurrence
+        },
+      });
+
+      console.log(`[MARKET_DEMAND] Cleaned up ${deletedClusters.count} old clusters`);
+      return { deletedCount: deletedClusters.count };
+    });
+
+    const finalResults = {
+      nichesAnalyzed: nicheAnalysis.length,
+      patternsExtracted: demandPatterns.length,
+      clustersUpdated: clusterResults.updatedClusters,
+      clustersCreated: clusterResults.newClusters,
+      clustersDeleted: cleanupResults.deletedCount,
+      topNiches: nicheAnalysis.slice(0, 5).map(n => ({
+        niche: n.niche,
+        count: n.count,
+        avgScore: n.avgScore.toFixed(1),
+        viablePercentage: ((n.viableCount / n.count) * 100).toFixed(0) + '%',
+      })),
+    };
+
+    console.log(`[MARKET_DEMAND] Market demand analysis completed:`, finalResults);
+    return finalResults;
+  }
+);
+
+// Helper function to extract common phrases
+function extractCommonPhrases(texts: string[]): string[] {
+  const phraseCount: Record<string, number> = {};
+  
+  // Extract 2-3 word phrases
+  texts.forEach(text => {
+    const words = text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2); // Filter short words
+    
+    // Extract 2-word phrases
+    for (let i = 0; i < words.length - 1; i++) {
+      const phrase = `${words[i]} ${words[i + 1]}`;
+      phraseCount[phrase] = (phraseCount[phrase] || 0) + 1;
+    }
+    
+    // Extract 3-word phrases
+    for (let i = 0; i < words.length - 2; i++) {
+      const phrase = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
+      phraseCount[phrase] = (phraseCount[phrase] || 0) + 1;
+    }
+  });
+  
+  // Sort by count and return top phrases
+  return Object.entries(phraseCount)
+    .filter(([, count]) => count >= 2) // At least 2 occurrences
+    .sort((a, b) => b[1] - a[1])
+    .map(([phrase]) => phrase)
+    .slice(0, 10); // Top 10 phrases
+}
 
 export const processUnprocessedPosts = inngest.createFunction(
   { 
