@@ -91,6 +91,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(!initialData);
   const [data, setData] = useState<PostsData | null>(initialData || null);
+  const [analyzingComments, setAnalyzingComments] = useState<string | null>(null);
   
   // Get current filter values from URL
   const currentPage = parseInt(searchParams.get('page') || '1');
@@ -165,6 +166,42 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
     router.push(`/posts${queryString}`);
   }, [router, searchParams]);
 
+  const handleAnalyzeComments = async (postId: string, permalink: string | null) => {
+    if (!permalink) {
+      alert('No Reddit permalink available for this post');
+      return;
+    }
+
+    setAnalyzingComments(postId);
+    try {
+      const response = await fetch('/api/analyze-comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          postId,
+          permalink,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to analyze comments');
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        alert(`Comments analysis triggered! Job ID: ${result.jobId}`);
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Error analyzing comments:', error);
+      alert('Failed to analyze comments. Please try again.');
+    } finally {
+      setAnalyzingComments(null);
+    }
+  };
 
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -478,17 +515,31 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                         </p>
                       )}
                     </div>
-                    {post.permalink && (
-                      <a
-                        href={formatRedditUrl(post.permalink) || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+                    <div className="flex gap-2">
+                      {post.permalink && (
+                        <a
+                          href={formatRedditUrl(post.permalink) || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Reddit
+                        </a>
+                      )}
+                      <button
+                        onClick={() => handleAnalyzeComments(post.id, post.permalink)}
+                        disabled={analyzingComments === post.id}
+                        className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <ExternalLink className="w-4 h-4" />
-                        Reddit
-                      </a>
-                    )}
+                        {analyzingComments === post.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <MessageSquare className="w-4 h-4" />
+                        )}
+                        {analyzingComments === post.id ? 'Analyzing...' : 'Analyze Comments'}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">

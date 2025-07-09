@@ -44,6 +44,27 @@ export interface ProcessedRedditPost {
   createdUtc: Date;
 }
 
+export interface RedditComment {
+  id: string;
+  body: string;
+  author: string;
+  score: number;
+  created_utc: number;
+  subreddit?: string;
+  parent_id?: string;
+  replies?: RedditComment[];
+}
+
+export interface RedditCommentResponse {
+  kind: string;
+  data: {
+    children: Array<{
+      kind: string;
+      data: RedditComment;
+    }>;
+  };
+}
+
 export const TARGET_SUBREDDITS = [
   'entrepreneur',
   'startups', 
@@ -240,6 +261,77 @@ export class RedditClient {
       createdUtc: new Date(post.created_utc * 1000),
     };
   };
+
+  async fetchPostComments(permalink: string): Promise<RedditComment[]> {
+    // Ensure permalink has correct format for comments
+    const commentsUrl = `${this.baseUrl}${permalink}.json`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
+    try {
+      const response = await fetch(commentsUrl, {
+        headers: this.headers,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch comments: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Reddit comments API returns an array: [post_data, comments_data]
+      if (!Array.isArray(data) || data.length < 2) {
+        throw new Error('Invalid comments response format');
+      }
+
+      const commentsData = data[1];
+      return this.processCommentsResponse(commentsData);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  protected processCommentsResponse(response: RedditCommentResponse): RedditComment[] {
+    const comments: RedditComment[] = [];
+    
+    const processComment = (child: unknown) => {
+      const c = child as { kind: string; data?: RedditComment };
+      if (c.kind === 't1' && c.data) {
+        const comment = c.data;
+        
+        // Skip deleted/removed comments
+        if (comment.body === '[deleted]' || comment.body === '[removed]') {
+          return;
+        }
+        
+        comments.push({
+          id: comment.id,
+          body: comment.body,
+          author: comment.author,
+          score: comment.score,
+          created_utc: comment.created_utc,
+          subreddit: comment.subreddit,
+          parent_id: comment.parent_id,
+        });
+        
+        // Process replies recursively
+        if (comment.replies && comment.replies.data && comment.replies.data.children) {
+          comment.replies.data.children.forEach(processComment);
+        }
+      }
+    };
+    
+    if (response.data && response.data.children) {
+      response.data.children.forEach(processComment);
+    }
+    
+    return comments;
+  }
 }
 
 // Import auth client

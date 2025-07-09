@@ -1488,6 +1488,220 @@ function extractCommonPhrases(texts: string[]): string[] {
     .slice(0, 10); // Top 10 phrases
 }
 
+export const analyzeRedditComments = inngest.createFunction(
+  { 
+    id: "analyze-reddit-comments",
+    retries: 2,
+  },
+  { event: "reddit/analyze.comments" },
+  async ({ event, step }) => {
+    const { postId, permalink } = event.data;
+    console.log(`[ANALYZE_COMMENTS] Starting comment analysis for post ${postId}`);
+
+    // Step 1: Fetch Reddit comments
+    const comments = await step.run("fetch-reddit-comments", async () => {
+      const client = createRedditClient();
+      
+      try {
+        console.log(`[ANALYZE_COMMENTS] Fetching comments from ${permalink}`);
+        const commentsData = await client.fetchPostComments(permalink);
+        console.log(`[ANALYZE_COMMENTS] Found ${commentsData.length} comments`);
+        return commentsData;
+      } catch (error) {
+        console.error(`[ANALYZE_COMMENTS] Error fetching comments:`, error);
+        throw error;
+      }
+    });
+
+    // Step 2: Filter and process comments
+    const processedComments = await step.run("process-comments", async () => {
+      // Filter out low-quality comments
+      const filteredComments = comments.filter(comment => {
+        const c = comment as unknown as { body: string; score: number };
+        return c.body && 
+          c.body.length > 20 && 
+          c.body !== '[deleted]' && 
+          c.body !== '[removed]' &&
+          c.score > 0; // Only comments with positive score
+      });
+
+      console.log(`[ANALYZE_COMMENTS] Filtered to ${filteredComments.length} quality comments`);
+      
+      // Sort by score and take top 20
+      const topComments = filteredComments
+        .sort((a, b) => (b as unknown as { score: number }).score - (a as unknown as { score: number }).score)
+        .slice(0, 20);
+
+      console.log(`[ANALYZE_COMMENTS] Processing top ${topComments.length} comments`);
+      return topComments;
+    });
+
+    // Step 3: Analyze comments for additional opportunities
+    const analysisResults = await step.run("analyze-comments-for-opportunities", async () => {
+      if (processedComments.length === 0) {
+        console.log(`[ANALYZE_COMMENTS] No comments to analyze`);
+        return { opportunities: [], totalAnalyzed: 0 };
+      }
+
+      const analyzer = new Delta4Analyzer(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+      const opportunities = [];
+
+      // Analyze each comment as if it were a mini-post
+      for (const comment of processedComments) {
+        try {
+          const c = comment as unknown as { id: string; body: string; author: string; score: number; subreddit?: string };
+          const analysis = await analyzer.analyzeOpportunity({
+            postTitle: `Comment: ${String(c.body).substring(0, 100)}...`,
+            postContent: String(c.body),
+            subreddit: String(c.subreddit || 'unknown'),
+            author: String(c.author),
+            score: Number(c.score),
+            numComments: 0,
+          });
+
+          if (analysis.isOpportunity && analysis.opportunity) {
+            opportunities.push({
+              commentId: String(c.id),
+              commentBody: String(c.body),
+              commentAuthor: String(c.author),
+              commentScore: Number(c.score),
+              opportunity: analysis.opportunity,
+              confidence: analysis.confidence,
+            });
+          }
+        } catch (error) {
+          console.error(`[ANALYZE_COMMENTS] Error analyzing comment ${String((comment as unknown as { id: string }).id)}:`, error);
+        }
+      }
+
+      console.log(`[ANALYZE_COMMENTS] Found ${opportunities.length} opportunities from comments`);
+      return { opportunities, totalAnalyzed: processedComments.length };
+    });
+
+    // Step 4: Store results in database
+    const storageResults = await step.run("store-comment-analysis-results", async () => {
+      // Get the original post
+      const post = await prisma.redditPost.findUnique({
+        where: { id: postId },
+      });
+
+      if (!post) {
+        throw new Error(`Post ${postId} not found`);
+      }
+
+      // Store each comment-derived opportunity
+      let stored = 0;
+      for (const result of analysisResults.opportunities) {
+        try {
+          const opp = result.opportunity;
+          // Create the opportunity
+          const opportunity = await prisma.opportunity.create({
+            data: {
+              title: opp.title,
+              description: opp.description,
+              currentSolution: opp.currentSolution,
+              proposedSolution: opp.proposedSolution,
+              marketContext: opp.marketContext,
+              implementationNotes: opp.implementationNotes,
+              
+              speedScore: opp.delta4Scores.speed,
+              convenienceScore: opp.delta4Scores.convenience,
+              trustScore: opp.delta4Scores.trust,
+              priceScore: opp.delta4Scores.price,
+              statusScore: opp.delta4Scores.status,
+              predictabilityScore: opp.delta4Scores.predictability,
+              uiUxScore: opp.delta4Scores.uiUx,
+              easeOfUseScore: opp.delta4Scores.easeOfUse,
+              legalFrictionScore: opp.delta4Scores.legalFriction,
+              emotionalComfortScore: opp.delta4Scores.emotionalComfort,
+              
+              overallScore: opp.overallScore,
+              viabilityThreshold: opp.viabilityThreshold,
+              
+              subreddit: post.subreddit,
+              marketSize: opp.marketSize,
+              complexity: opp.complexity,
+              successProbability: opp.successProbability,
+              
+              // Categories
+              businessType: opp.categories.businessType,
+              businessModel: opp.categories.businessModel,
+              revenueModel: opp.categories.revenueModel,
+              pricingModel: opp.categories.pricingModel,
+              platform: opp.categories.platform,
+              mobileSupport: opp.categories.mobileSupport,
+              deploymentType: opp.categories.deploymentType,
+              developmentType: opp.categories.developmentType,
+              targetAudience: opp.categories.targetAudience,
+              userType: opp.categories.userType,
+              technicalLevel: opp.categories.technicalLevel,
+              ageGroup: opp.categories.ageGroup,
+              geography: opp.categories.geography,
+              marketType: opp.categories.marketType,
+              economicLevel: opp.categories.economicLevel,
+              industryVertical: opp.categories.industryVertical,
+              niche: opp.categories.niche,
+              developmentComplexity: opp.categories.developmentComplexity,
+              teamSize: opp.categories.teamSize,
+              capitalRequirement: opp.categories.capitalRequirement,
+              developmentTime: opp.categories.developmentTime,
+              marketSizeCategory: opp.categories.marketSizeCategory,
+              competitionLevel: opp.categories.competitionLevel,
+              marketTrend: opp.categories.marketTrend,
+              growthPotential: opp.categories.growthPotential,
+              acquisitionStrategy: opp.categories.acquisitionStrategy,
+              scalabilityType: opp.categories.scalabilityType,
+              
+              // Market Validation Fields
+              marketValidationScore: opp.marketValidation.marketValidationScore,
+              engagementLevel: opp.marketValidation.engagementLevel,
+              problemFrequency: opp.marketValidation.problemFrequency,
+              customerType: opp.marketValidation.customerType,
+              paymentWillingness: opp.marketValidation.paymentWillingness,
+              competitiveAnalysis: opp.marketValidation.competitiveAnalysis,
+              validationTier: opp.marketValidation.validationTier,
+              
+              // Link to the original post
+              redditPosts: {
+                create: {
+                  redditPostId: postId,
+                  sourceType: 'comment',
+                  confidence: result.confidence,
+                }
+              }
+            }
+          });
+
+          stored++;
+          console.log(`[ANALYZE_COMMENTS] Stored comment opportunity: ${opportunity.title}`);
+        } catch (error) {
+          console.error(`[ANALYZE_COMMENTS] Error storing comment opportunity:`, error);
+        }
+      }
+
+      return { stored, total: analysisResults.opportunities.length };
+    });
+
+    const finalResults = {
+      postId,
+      permalink,
+      commentsFound: comments.length,
+      commentsAnalyzed: analysisResults.totalAnalyzed,
+      opportunitiesFound: analysisResults.opportunities.length,
+      opportunitiesStored: storageResults.stored,
+      summary: analysisResults.opportunities.map(o => ({
+        title: o.opportunity.title,
+        score: o.opportunity.overallScore,
+        viable: o.opportunity.viabilityThreshold,
+        commentScore: o.commentScore,
+      })),
+    };
+
+    console.log(`[ANALYZE_COMMENTS] Comment analysis completed:`, finalResults);
+    return finalResults;
+  }
+);
+
 export const processUnprocessedPosts = inngest.createFunction(
   { 
     id: "process-unprocessed-posts",
