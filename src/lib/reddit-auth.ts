@@ -113,22 +113,18 @@ export class RedditAuthClient {
       },
     });
 
-    // Handle token expiration
+    // Handle token expiration - let Inngest handle the retry
     if (response.status === 401) {
-      console.log('[REDDIT_AUTH] Token expired, re-authenticating...');
+      console.log('[REDDIT_AUTH] Token expired, invalidating current token for retry...');
       this.accessToken = undefined;
       this.tokenExpiry = undefined;
       
-      // Retry with new token
-      const newToken = await this.getAccessToken();
-      return fetch(url, {
-        ...options,
-        headers: {
-          'Authorization': `Bearer ${newToken}`,
-          'User-Agent': this.config.userAgent,
-          ...options.headers,
-        },
-      });
+      // Throw error to let Inngest handle the retry
+      const tokenError = new Error('Reddit OAuth token expired') as RedditAPIError;
+      tokenError.status = 401;
+      tokenError.isRateLimited = false;
+      tokenError.isBlocked = false;
+      throw tokenError;
     }
 
     return response;

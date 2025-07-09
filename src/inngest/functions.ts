@@ -12,7 +12,11 @@ import { clusteringEngine } from "../lib/semantic-clustering";
 export const scrapeSubreddit = inngest.createFunction(
   { 
     id: "scrape-subreddit",
-    retries: 3
+    retries: 3,
+    rateLimit: {
+      limit: 30,
+      period: "1m"
+    }
   },
   { event: "reddit/scrape.subreddit" },
   async ({ event, step }) => {
@@ -86,7 +90,7 @@ export const scrapeSubreddit = inngest.createFunction(
         
         if (redditError.isRateLimited) {
           console.warn(`[SCRAPE] Rate limited for r/${subreddit}. Will retry later.`);
-          // For rate limits, let Inngest handle the retry
+          // For rate limits, let Inngest handle the retry with its built-in mechanisms
           throw error;
         }
         
@@ -195,8 +199,8 @@ export const scrapeSubreddit = inngest.createFunction(
           
           // Add delay between requests to prevent rate limiting
           if (i < storedPosts.length - 1) {
-            console.log(`[SCRAPE] Waiting 2 seconds before next AI analysis trigger...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log(`[SCRAPE] Using step.sleep for 2 seconds before next AI analysis trigger...`);
+            await step.sleep("rate-limit-delay", "2s");
           }
         }
         console.log(`[SCRAPE] All AI analysis events sent`);
@@ -474,21 +478,36 @@ export const analyzeOpportunity = inngest.createFunction(
 );
 
 export const dailyRedditScrape = inngest.createFunction(
-  { id: "daily-reddit-scrape" },
+  { 
+    id: "daily-reddit-scrape",
+    concurrency: {
+      limit: 5
+    }
+  },
   { cron: "0 9 * * *" },
   async ({ step }) => {
     const results = await step.run("trigger-subreddit-scraping", async () => {
-      const promises = TARGET_SUBREDDITS.map(subreddit => 
-        inngest.send({
+      const events = [];
+      
+      // Stagger the scraping across subreddits to avoid overwhelming Reddit
+      for (let i = 0; i < TARGET_SUBREDDITS.length; i++) {
+        const subreddit = TARGET_SUBREDDITS[i];
+        
+        events.push(inngest.send({
           name: "reddit/scrape.subreddit",
           data: {
             subreddit,
             limit: 25,
           }
-        })
-      );
-
-      await Promise.all(promises);
+        }));
+        
+        // Add delay between triggering scrapes using step.sleep
+        if (i < TARGET_SUBREDDITS.length - 1) {
+          await step.sleep(`delay-${i}`, "10s");
+        }
+      }
+      
+      await Promise.all(events);
       return { 
         subredditsTriggered: TARGET_SUBREDDITS.length 
       };

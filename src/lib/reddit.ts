@@ -77,8 +77,6 @@ export class RedditClient {
     'User-Agent': 'OpportunityFinder/1.0.0 (by /u/OpportunityBot)',
     'Accept': 'application/json',
   };
-  protected readonly maxRetries = 3;
-  protected readonly baseDelay = 1000; // 1 second
 
   async fetchSubredditPosts(
     subreddit: string,
@@ -87,66 +85,36 @@ export class RedditClient {
   ): Promise<ProcessedRedditPost[]> {
     const url = `${this.baseUrl}/r/${subreddit}/${sort}.json?limit=${limit}`;
     
-    return this.retryWithBackoff(async () => {
-      // Create timeout controller for older Node.js versions
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
-      try {
-        const response = await fetch(url, {
-          headers: this.headers,
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        await this.handleResponseErrors(response, subreddit);
-        
-        const data: RedditResponse = await response.json();
-        return this.processRedditResponse(data);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        
-        // Handle network errors that don't have a response object
-        if (error instanceof Error && !('status' in error)) {
-          const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
-          networkError.isBlocked = false;
-          networkError.isRateLimited = false;
-          throw networkError;
-        }
-        
-        throw error;
-      }
-    });
-  }
-
-  protected async retryWithBackoff<T>(
-    operation: () => Promise<T>,
-    attempt: number = 1
-  ): Promise<T> {
+    // Create timeout controller for older Node.js versions
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
     try {
-      return await operation();
-    } catch (error) {
-      const redditError = error as RedditAPIError;
-      
-      // Don't retry on permanent blocks or if we've exceeded max retries
-      if (redditError.isBlocked || attempt >= this.maxRetries) {
-        throw error;
-      }
-      
-      // Don't retry network errors (not Reddit API errors)
-      if (!redditError.status) {
-        throw error;
-      }
+      const response = await fetch(url, {
+        headers: this.headers,
+        signal: controller.signal,
+      });
 
-      // Calculate delay with exponential backoff
-      const delay = redditError.retryAfter || (this.baseDelay * Math.pow(2, attempt - 1));
+      clearTimeout(timeoutId);
+      await this.handleResponseErrors(response, subreddit);
       
-      console.warn(`Reddit API attempt ${attempt} failed, retrying in ${delay}ms:`, (error as Error).message);
+      const data: RedditResponse = await response.json();
+      return this.processRedditResponse(data);
+    } catch (error) {
+      clearTimeout(timeoutId);
       
-      await this.sleep(delay);
-      return this.retryWithBackoff(operation, attempt + 1);
+      // Handle network errors that don't have a response object
+      if (error instanceof Error && !('status' in error)) {
+        const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
+        networkError.isBlocked = false;
+        networkError.isRateLimited = false;
+        throw networkError;
+      }
+      
+      throw error;
     }
   }
+
 
   protected async handleResponseErrors(response: Response, subreddit: string): Promise<void> {
     if (response.ok) return;
@@ -191,9 +159,6 @@ export class RedditClient {
     throw error;
   }
 
-  protected sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 
   protected processRedditResponse(response: RedditResponse): ProcessedRedditPost[] {
     return response.data.children
@@ -274,29 +239,27 @@ export class AuthenticatedRedditClient extends RedditClient {
     
     const endpoint = `/r/${subreddit}/${sort}?limit=${limit}&raw_json=1`;
     
-    return this.retryWithBackoff(async () => {
-      try {
-        const response = await this.authClient.makeAuthenticatedRequest(endpoint);
-        
-        if (!response.ok) {
-          // Use parent class error handling
-          await this.handleResponseErrors(response, subreddit);
-        }
-        
-        const data: RedditResponse = await response.json();
-        return this.processRedditResponse(data);
-      } catch (error) {
-        // Handle network errors
-        if (error instanceof Error && !('status' in error)) {
-          const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
-          networkError.isBlocked = false;
-          networkError.isRateLimited = false;
-          throw networkError;
-        }
-        
-        throw error;
+    try {
+      const response = await this.authClient.makeAuthenticatedRequest(endpoint);
+      
+      if (!response.ok) {
+        // Use parent class error handling
+        await this.handleResponseErrors(response, subreddit);
       }
-    });
+      
+      const data: RedditResponse = await response.json();
+      return this.processRedditResponse(data);
+    } catch (error) {
+      // Handle network errors
+      if (error instanceof Error && !('status' in error)) {
+        const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
+        networkError.isBlocked = false;
+        networkError.isRateLimited = false;
+        throw networkError;
+      }
+      
+      throw error;
+    }
   }
 }
 
