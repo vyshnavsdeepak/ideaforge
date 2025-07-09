@@ -1,7 +1,7 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { opportunitySchema, OpportunityAnalysis } from './ai';
+import { opportunitySchema } from './ai';
 
 export interface BatchAnalysisRequest {
   id: string;
@@ -18,7 +18,7 @@ export interface BatchAnalysisResult {
   id: string;
   postId: string;
   success: boolean;
-  analysis?: OpportunityAnalysis;
+  analysis?: unknown;
   error?: string;
 }
 
@@ -28,7 +28,74 @@ const batchAnalysisSchema = z.object({
       id: z.string(),
       postId: z.string(),
       success: z.boolean(),
-      analysis: opportunitySchema.optional(),
+      analysis: z.object({
+        isOpportunity: z.boolean(),
+        confidence: z.number(),
+        opportunity: z.object({
+          title: z.string(),
+          description: z.string(),
+          proposedSolution: z.string(),
+          marketContext: z.string().optional(),
+          implementationNotes: z.string().optional(),
+          delta4Scores: z.object({
+            speed: z.number(),
+            convenience: z.number(),
+            trust: z.number(),
+            price: z.number(),
+            status: z.number(),
+            predictability: z.number(),
+            uiUx: z.number(),
+            easeOfUse: z.number(),
+            legalFriction: z.number(),
+            emotionalComfort: z.number(),
+          }),
+          marketSize: z.enum(['Small', 'Medium', 'Large', 'Unknown']),
+          complexity: z.enum(['Low', 'Medium', 'High']),
+          successProbability: z.enum(['Low', 'Medium', 'High']),
+          categories: z.object({
+            businessType: z.string(),
+            businessModel: z.string(),
+            revenueModel: z.string(),
+            pricingModel: z.string(),
+            platform: z.string(),
+            mobileSupport: z.string(),
+            deploymentType: z.string(),
+            developmentType: z.string(),
+            targetAudience: z.string(),
+            userType: z.string(),
+            technicalLevel: z.string(),
+            ageGroup: z.string(),
+            geography: z.string(),
+            marketType: z.string(),
+            economicLevel: z.string(),
+            industryVertical: z.string(),
+            niche: z.string(),
+            developmentComplexity: z.string(),
+            teamSize: z.string(),
+            capitalRequirement: z.string(),
+            developmentTime: z.string(),
+            marketSizeCategory: z.string(),
+            competitionLevel: z.string(),
+            marketTrend: z.string(),
+            growthPotential: z.string(),
+            acquisitionStrategy: z.string(),
+            scalabilityType: z.string(),
+          }),
+          reasoning: z.object({
+            speed: z.string(),
+            convenience: z.string(),
+            trust: z.string(),
+            price: z.string(),
+            status: z.string(),
+            predictability: z.string(),
+            uiUx: z.string(),
+            easeOfUse: z.string(),
+            legalFriction: z.string(),
+            emotionalComfort: z.string(),
+          }),
+        }).optional(),
+        reasons: z.array(z.string()).optional(),
+      }).optional(),
       error: z.string().optional(),
     })
   )
@@ -137,7 +204,7 @@ Return the analyses in the exact same order as the input posts.
     id: analysis.id,
     postId: analysis.postId,
     success: analysis.success,
-    analysis: analysis.analysis,
+    analysis: analysis.analysis || null,
     error: analysis.error,
   }));
 }
@@ -182,7 +249,7 @@ Provide a detailed analysis including Delta 4 scores, market assessment, and imp
 export function processBatchResults(results: BatchAnalysisResult[]): Array<{
   postId: string;
   success: boolean;
-  analysis?: OpportunityAnalysis;
+  analysis?: unknown;
   error?: string;
 }> {
   return results.map(result => ({

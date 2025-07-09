@@ -476,39 +476,236 @@ export const dailyRedditScrape = inngest.createFunction(
   { 
     id: "daily-reddit-scrape",
     concurrency: {
-      limit: 5
+      limit: 1
     }
   },
   { cron: "0 9 * * *" },
   async ({ step }) => {
-    const results = await step.run("trigger-subreddit-scraping", async () => {
-      const events = [];
+    const results = await step.run("trigger-mega-batch-scraping", async () => {
+      console.log(`[DAILY_SCRAPE] Triggering mega-batch scraping for all ${TARGET_SUBREDDITS.length} subreddits`);
       
-      // Stagger the scraping across subreddits to avoid overwhelming Reddit
-      for (let i = 0; i < TARGET_SUBREDDITS.length; i++) {
-        const subreddit = TARGET_SUBREDDITS[i];
-        
-        events.push(inngest.send({
-          name: "reddit/scrape.subreddit",
-          data: {
-            subreddit,
-            limit: 25,
-          }
-        }));
-        
-        // Add delay between triggering scrapes using step.sleep
-        if (i < TARGET_SUBREDDITS.length - 1) {
-          await step.sleep(`delay-${i}`, "10s");
+      const event = await inngest.send({
+        name: "reddit/scrape.all-subreddits",
+        data: {
+          timestamp: new Date().toISOString(),
+          subreddits: TARGET_SUBREDDITS,
         }
-      }
+      });
       
-      await Promise.all(events);
       return { 
-        subredditsTriggered: TARGET_SUBREDDITS.length 
+        megaBatchTriggered: true,
+        subredditsIncluded: TARGET_SUBREDDITS.length,
+        eventId: event.ids[0]
       };
     });
 
+    console.log(`[DAILY_SCRAPE] Mega-batch scraping triggered:`, results);
     return results;
+  }
+);
+
+export const scrapeAllSubreddits = inngest.createFunction(
+  { 
+    id: "scrape-all-subreddits",
+    retries: 3,
+    rateLimit: {
+      limit: 100,
+      period: "1m"
+    }
+  },
+  { event: "reddit/scrape.all-subreddits" },
+  async ({ step }) => {
+    console.log(`[MEGA_SCRAPE] Starting mega-scrape for all ${TARGET_SUBREDDITS.length} subreddits`);
+
+    // Fetch posts from all subreddits in parallel
+    const allPosts = await step.run("fetch-all-subreddit-posts", async () => {
+      const client = createRedditClient();
+      const allFetchedPosts = [];
+      
+      console.log(`[MEGA_SCRAPE] Fetching posts from ${TARGET_SUBREDDITS.length} subreddits in parallel`);
+      
+      // Fetch from all subreddits concurrently
+      const fetchPromises = TARGET_SUBREDDITS.map(async (subreddit) => {
+        try {
+          console.log(`[MEGA_SCRAPE] Fetching from r/${subreddit}`);
+          const posts = await client.fetchSubredditPosts(subreddit, 'hot', 25);
+          console.log(`[MEGA_SCRAPE] Fetched ${posts.length} posts from r/${subreddit}`);
+          return posts;
+        } catch (error) {
+          console.error(`[MEGA_SCRAPE] Error fetching r/${subreddit}:`, error);
+          
+          // Handle specific Reddit errors gracefully
+          if (error instanceof Error && 'isBlocked' in error && error.isBlocked) {
+            console.log(`[MEGA_SCRAPE] Skipping blocked subreddit r/${subreddit}`);
+            return [];
+          }
+          
+          throw error;
+        }
+      });
+      
+      // Wait for all subreddits to complete
+      const results = await Promise.allSettled(fetchPromises);
+      
+      // Process results and collect all posts
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const subreddit = TARGET_SUBREDDITS[i];
+        
+        if (result.status === 'fulfilled') {
+          allFetchedPosts.push(...result.value);
+          console.log(`[MEGA_SCRAPE] Successfully processed r/${subreddit}: ${result.value.length} posts`);
+        } else {
+          console.error(`[MEGA_SCRAPE] Failed to process r/${subreddit}:`, result.reason);
+        }
+      }
+      
+      console.log(`[MEGA_SCRAPE] Total posts fetched across all subreddits: ${allFetchedPosts.length}`);
+      return allFetchedPosts;
+    });
+
+    // Store all posts and filter for new ones
+    const storedPosts = await step.run("store-and-filter-posts", async () => {
+      console.log(`[MEGA_SCRAPE] Processing ${allPosts.length} posts for storage and deduplication`);
+      
+      const newPosts = [];
+      const skippedPosts = [];
+      
+      for (const post of allPosts) {
+        try {
+          // Check for duplicates
+          const existingPost = await checkRedditPostDuplication(post.redditId, post.subreddit, post.title, post.content, post.author);
+          
+          if (existingPost.isDuplicate) {
+            skippedPosts.push({ post: post.title, reason: existingPost.reason });
+            
+            // Update existing post if it's the same but has new engagement
+            if (existingPost.existingId) {
+              await updateRedditPost(existingPost.existingId, {
+                score: post.score,
+                upvotes: post.upvotes,
+                downvotes: post.downvotes,
+                numComments: post.numComments
+              });
+            }
+            continue;
+          }
+          
+          // Store new post
+          const storedPost = await prisma.redditPost.create({
+            data: {
+              redditId: post.redditId,
+              title: post.title,
+              content: post.content,
+              subreddit: post.subreddit,
+              author: post.author,
+              score: post.score,
+              upvotes: post.upvotes,
+              downvotes: post.downvotes,
+              numComments: post.numComments,
+              url: post.url,
+              permalink: post.permalink,
+              createdUtc: post.createdUtc,
+            }
+          });
+          
+          newPosts.push(storedPost);
+          
+        } catch (error) {
+          console.error(`[MEGA_SCRAPE] Error processing post ${post.title}:`, error);
+          skippedPosts.push({ post: post.title, reason: 'Storage error' });
+        }
+      }
+      
+      console.log(`[MEGA_SCRAPE] Stored ${newPosts.length} new posts, skipped ${skippedPosts.length} duplicates`);
+      if (skippedPosts.length > 0) {
+        console.log(`[MEGA_SCRAPE] Skipped reasons:`, skippedPosts.map(p => p.reason));
+      }
+      
+      return newPosts;
+    });
+
+    // Trigger mega-batch AI analysis for all posts
+    if (storedPosts.length > 0) {
+      await step.run("trigger-mega-batch-ai-analysis", async () => {
+        console.log(`[MEGA_SCRAPE] Triggering mega-batch AI analysis for ${storedPosts.length} posts across all subreddits`);
+        
+        await inngest.send({
+          name: "ai/mega-batch-analyze.opportunities",
+          data: {
+            totalPosts: storedPosts.length,
+            subreddits: TARGET_SUBREDDITS,
+            posts: storedPosts.map(post => ({
+              postId: post.id,
+              postTitle: post.title,
+              postContent: post.content,
+              subreddit: post.subreddit,
+              author: post.author,
+              score: post.score,
+              numComments: post.numComments,
+            }))
+          }
+        });
+        
+        console.log(`[MEGA_SCRAPE] Mega-batch AI analysis event sent for ${storedPosts.length} posts`);
+      });
+    } else {
+      console.log(`[MEGA_SCRAPE] No new posts to analyze`);
+    }
+
+    // Update cursors for all subreddits
+    await step.run("update-all-subreddit-cursors", async () => {
+      console.log(`[MEGA_SCRAPE] Updating cursors for all subreddits`);
+      
+      const subredditGroups = storedPosts.reduce((groups, post) => {
+        if (!groups[post.subreddit]) {
+          groups[post.subreddit] = [];
+        }
+        groups[post.subreddit].push(post);
+        return groups;
+      }, {} as Record<string, typeof storedPosts>);
+      
+      const cursorUpdates = [];
+      
+      for (const [subreddit, posts] of Object.entries(subredditGroups)) {
+        if (posts.length > 0) {
+          // Find the newest post for this subreddit
+          const newestPost = posts.reduce((newest, post) => 
+            new Date(post.createdUtc).getTime() > new Date(newest.createdUtc).getTime() ? post : newest
+          , posts[0]);
+          
+          cursorUpdates.push(
+            prisma.subredditCursor.upsert({
+              where: { subreddit },
+              update: {
+                lastRedditId: newestPost.redditId,
+                lastCreatedUtc: newestPost.createdUtc,
+                postsProcessed: { increment: posts.length },
+                updatedAt: new Date()
+              },
+              create: {
+                subreddit,
+                lastRedditId: newestPost.redditId,
+                lastCreatedUtc: newestPost.createdUtc,
+                postsProcessed: posts.length
+              }
+            })
+          );
+        }
+      }
+      
+      await Promise.all(cursorUpdates);
+      console.log(`[MEGA_SCRAPE] Updated cursors for ${Object.keys(subredditGroups).length} subreddits`);
+    });
+
+    const result = { 
+      subredditsProcessed: TARGET_SUBREDDITS.length,
+      totalPostsFetched: allPosts.length,
+      newPostsStored: storedPosts.length,
+    };
+    
+    console.log(`[MEGA_SCRAPE] Mega-scrape completed:`, result);
+    return result;
   }
 );
 
@@ -558,7 +755,7 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
       let errorCount = 0;
       
       for (const result of processed) {
-        if (result.success && result.analysis) {
+        if (result.success && result.analysis && result.analysis.isOpportunity && result.analysis.opportunity) {
           successCount++;
           
           // Store the analysis result (same as individual analysis)
@@ -574,69 +771,69 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
 
             // Check for duplicate opportunity
             const existingOpp = await checkOpportunityDuplication(
-              result.analysis.title, 
-              result.analysis.description, 
-              result.analysis.proposedSolution,
-              result.analysis.categories.niche
+              result.analysis.opportunity.title, 
+              result.analysis.opportunity.description, 
+              result.analysis.opportunity.proposedSolution,
+              result.analysis.opportunity.categories.niche
             );
             if (existingOpp.isDuplicate) {
-              console.log(`[BATCH_AI] Duplicate opportunity detected: ${result.analysis.title}`);
+              console.log(`[BATCH_AI] Duplicate opportunity detected: ${result.analysis.opportunity.title}`);
               continue;
             }
 
             // Store the opportunity
             const opportunity = await prisma.opportunity.create({
               data: {
-                title: result.analysis.title,
-                description: result.analysis.description,
-                proposedSolution: result.analysis.proposedSolution,
-                marketContext: result.analysis.marketContext,
-                implementationNotes: result.analysis.implementationNotes,
-                marketSize: result.analysis.marketSize,
-                complexity: result.analysis.complexity,
-                successProbability: result.analysis.successProbability,
+                title: result.analysis.opportunity.title,
+                description: result.analysis.opportunity.description,
+                proposedSolution: result.analysis.opportunity.proposedSolution,
+                marketContext: result.analysis.opportunity.marketContext,
+                implementationNotes: result.analysis.opportunity.implementationNotes,
+                marketSize: result.analysis.opportunity.marketSize,
+                complexity: result.analysis.opportunity.complexity,
+                successProbability: result.analysis.opportunity.successProbability,
                 subreddit: post.subreddit,
                 
                 // Delta 4 scores
-                speedScore: result.analysis.delta4Scores.speed,
-                convenienceScore: result.analysis.delta4Scores.convenience,
-                trustScore: result.analysis.delta4Scores.trust,
-                priceScore: result.analysis.delta4Scores.price,
-                statusScore: result.analysis.delta4Scores.status,
-                predictabilityScore: result.analysis.delta4Scores.predictability,
-                uiUxScore: result.analysis.delta4Scores.uiUx,
-                easeOfUseScore: result.analysis.delta4Scores.easeOfUse,
-                legalFrictionScore: result.analysis.delta4Scores.legalFriction,
-                emotionalComfortScore: result.analysis.delta4Scores.emotionalComfort,
+                speedScore: result.analysis.opportunity.delta4Scores.speed,
+                convenienceScore: result.analysis.opportunity.delta4Scores.convenience,
+                trustScore: result.analysis.opportunity.delta4Scores.trust,
+                priceScore: result.analysis.opportunity.delta4Scores.price,
+                statusScore: result.analysis.opportunity.delta4Scores.status,
+                predictabilityScore: result.analysis.opportunity.delta4Scores.predictability,
+                uiUxScore: result.analysis.opportunity.delta4Scores.uiUx,
+                easeOfUseScore: result.analysis.opportunity.delta4Scores.easeOfUse,
+                legalFrictionScore: result.analysis.opportunity.delta4Scores.legalFriction,
+                emotionalComfortScore: result.analysis.opportunity.delta4Scores.emotionalComfort,
                 
                 // Categories
-                businessType: result.analysis.categories.businessType,
-                businessModel: result.analysis.categories.businessModel,
-                revenueModel: result.analysis.categories.revenueModel,
-                pricingModel: result.analysis.categories.pricingModel,
-                platform: result.analysis.categories.platform,
-                mobileSupport: result.analysis.categories.mobileSupport,
-                deploymentType: result.analysis.categories.deploymentType,
-                developmentType: result.analysis.categories.developmentType,
-                targetAudience: result.analysis.categories.targetAudience,
-                userType: result.analysis.categories.userType,
-                technicalLevel: result.analysis.categories.technicalLevel,
-                ageGroup: result.analysis.categories.ageGroup,
-                geography: result.analysis.categories.geography,
-                marketType: result.analysis.categories.marketType,
-                economicLevel: result.analysis.categories.economicLevel,
-                industryVertical: result.analysis.categories.industryVertical,
-                niche: result.analysis.categories.niche,
-                developmentComplexity: result.analysis.categories.developmentComplexity,
-                teamSize: result.analysis.categories.teamSize,
-                capitalRequirement: result.analysis.categories.capitalRequirement,
-                developmentTime: result.analysis.categories.developmentTime,
-                marketSizeCategory: result.analysis.categories.marketSizeCategory,
-                competitionLevel: result.analysis.categories.competitionLevel,
-                marketTrend: result.analysis.categories.marketTrend,
-                growthPotential: result.analysis.categories.growthPotential,
-                acquisitionStrategy: result.analysis.categories.acquisitionStrategy,
-                scalabilityType: result.analysis.categories.scalabilityType,
+                businessType: result.analysis.opportunity.categories.businessType,
+                businessModel: result.analysis.opportunity.categories.businessModel,
+                revenueModel: result.analysis.opportunity.categories.revenueModel,
+                pricingModel: result.analysis.opportunity.categories.pricingModel,
+                platform: result.analysis.opportunity.categories.platform,
+                mobileSupport: result.analysis.opportunity.categories.mobileSupport,
+                deploymentType: result.analysis.opportunity.categories.deploymentType,
+                developmentType: result.analysis.opportunity.categories.developmentType,
+                targetAudience: result.analysis.opportunity.categories.targetAudience,
+                userType: result.analysis.opportunity.categories.userType,
+                technicalLevel: result.analysis.opportunity.categories.technicalLevel,
+                ageGroup: result.analysis.opportunity.categories.ageGroup,
+                geography: result.analysis.opportunity.categories.geography,
+                marketType: result.analysis.opportunity.categories.marketType,
+                economicLevel: result.analysis.opportunity.categories.economicLevel,
+                industryVertical: result.analysis.opportunity.categories.industryVertical,
+                niche: result.analysis.opportunity.categories.niche,
+                developmentComplexity: result.analysis.opportunity.categories.developmentComplexity,
+                teamSize: result.analysis.opportunity.categories.teamSize,
+                capitalRequirement: result.analysis.opportunity.categories.capitalRequirement,
+                developmentTime: result.analysis.opportunity.categories.developmentTime,
+                marketSizeCategory: result.analysis.opportunity.categories.marketSizeCategory,
+                competitionLevel: result.analysis.opportunity.categories.competitionLevel,
+                marketTrend: result.analysis.opportunity.categories.marketTrend,
+                growthPotential: result.analysis.opportunity.categories.growthPotential,
+                acquisitionStrategy: result.analysis.opportunity.categories.acquisitionStrategy,
+                scalabilityType: result.analysis.opportunity.categories.scalabilityType,
               }
             });
 
@@ -646,11 +843,11 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
                 opportunityId: opportunity.id,
                 redditPostId: post.id,
                 sourceType: "post",
-                confidence: result.analysis.confidence || 0.9,
+                confidence: 0.9,
               }
             });
 
-            console.log(`[BATCH_AI] Successfully stored opportunity: ${result.analysis.title}`);
+            console.log(`[BATCH_AI] Successfully stored opportunity: ${result.analysis.opportunity.title}`);
           } catch (storeError) {
             console.error(`[BATCH_AI] Failed to store opportunity for post ${result.postId}:`, storeError);
             errorCount++;
@@ -672,6 +869,183 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
     };
     
     console.log(`[BATCH_AI] Batch analysis completed:`, result);
+    return result;
+  }
+);
+
+export const megaBatchAnalyzeOpportunities = inngest.createFunction(
+  { 
+    id: "mega-batch-analyze-opportunities",
+    retries: 3,
+    rateLimit: {
+      limit: 10,
+      period: "1m"
+    }
+  },
+  { event: "ai/mega-batch-analyze.opportunities" },
+  async ({ event, step }) => {
+    const { totalPosts, subreddits, posts } = event.data;
+    console.log(`[MEGA_BATCH_AI] Starting mega-batch analysis for ${totalPosts} posts across ${subreddits.length} subreddits`);
+
+    const batchRequests: BatchAnalysisRequest[] = posts.map((post: {
+      postId: string;
+      postTitle: string;
+      postContent: string;
+      subreddit: string;
+      author: string;
+      score: number;
+      numComments: number;
+    }, index: number) => ({
+      id: `mega_${index}`,
+      postId: post.postId,
+      postTitle: post.postTitle,
+      postContent: post.postContent,
+      subreddit: post.subreddit,
+      author: post.author,
+      score: post.score,
+      numComments: post.numComments,
+    }));
+
+    const results = await step.run("mega-batch-ai-analysis", async () => {
+      console.log(`[MEGA_BATCH_AI] Processing ${batchRequests.length} posts in mega-batches of 10`);
+      return await batchAnalyzeOpportunities(batchRequests, 10); // Process 10 posts per batch for better efficiency
+    });
+
+    const processedResults = await step.run("process-mega-batch-results", async () => {
+      console.log(`[MEGA_BATCH_AI] Processing ${results.length} mega-batch results`);
+      const processed = processBatchResults(results);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      const subredditStats: Record<string, {successful: number, failed: number}> = {};
+      
+      for (const result of processed) {
+        // Initialize subreddit stats
+        const subreddit = batchRequests.find(r => r.postId === result.postId)?.subreddit || 'unknown';
+        if (!subredditStats[subreddit]) {
+          subredditStats[subreddit] = { successful: 0, failed: 0 };
+        }
+        
+        if (result.success && result.analysis && result.analysis.isOpportunity && result.analysis.opportunity) {
+          successCount++;
+          subredditStats[subreddit].successful++;
+          
+          // Store the analysis result (same as individual analysis)
+          try {
+            const post = await prisma.redditPost.findUnique({
+              where: { id: result.postId }
+            });
+            
+            if (!post) {
+              console.error(`[MEGA_BATCH_AI] Post ${result.postId} not found in database`);
+              continue;
+            }
+
+            // Check for duplicate opportunity
+            const existingOpp = await checkOpportunityDuplication(
+              result.analysis.opportunity.title, 
+              result.analysis.opportunity.description, 
+              result.analysis.opportunity.proposedSolution,
+              result.analysis.opportunity.categories.niche
+            );
+            if (existingOpp.isDuplicate) {
+              console.log(`[MEGA_BATCH_AI] Duplicate opportunity detected: ${result.analysis.opportunity.title}`);
+              continue;
+            }
+
+            // Store the opportunity
+            const opportunity = await prisma.opportunity.create({
+              data: {
+                title: result.analysis.opportunity.title,
+                description: result.analysis.opportunity.description,
+                proposedSolution: result.analysis.opportunity.proposedSolution,
+                marketContext: result.analysis.opportunity.marketContext,
+                implementationNotes: result.analysis.opportunity.implementationNotes,
+                marketSize: result.analysis.opportunity.marketSize,
+                complexity: result.analysis.opportunity.complexity,
+                successProbability: result.analysis.opportunity.successProbability,
+                subreddit: post.subreddit,
+                
+                // Delta 4 scores
+                speedScore: result.analysis.opportunity.delta4Scores.speed,
+                convenienceScore: result.analysis.opportunity.delta4Scores.convenience,
+                trustScore: result.analysis.opportunity.delta4Scores.trust,
+                priceScore: result.analysis.opportunity.delta4Scores.price,
+                statusScore: result.analysis.opportunity.delta4Scores.status,
+                predictabilityScore: result.analysis.opportunity.delta4Scores.predictability,
+                uiUxScore: result.analysis.opportunity.delta4Scores.uiUx,
+                easeOfUseScore: result.analysis.opportunity.delta4Scores.easeOfUse,
+                legalFrictionScore: result.analysis.opportunity.delta4Scores.legalFriction,
+                emotionalComfortScore: result.analysis.opportunity.delta4Scores.emotionalComfort,
+                
+                // Categories
+                businessType: result.analysis.opportunity.categories.businessType,
+                businessModel: result.analysis.opportunity.categories.businessModel,
+                revenueModel: result.analysis.opportunity.categories.revenueModel,
+                pricingModel: result.analysis.opportunity.categories.pricingModel,
+                platform: result.analysis.opportunity.categories.platform,
+                mobileSupport: result.analysis.opportunity.categories.mobileSupport,
+                deploymentType: result.analysis.opportunity.categories.deploymentType,
+                developmentType: result.analysis.opportunity.categories.developmentType,
+                targetAudience: result.analysis.opportunity.categories.targetAudience,
+                userType: result.analysis.opportunity.categories.userType,
+                technicalLevel: result.analysis.opportunity.categories.technicalLevel,
+                ageGroup: result.analysis.opportunity.categories.ageGroup,
+                geography: result.analysis.opportunity.categories.geography,
+                marketType: result.analysis.opportunity.categories.marketType,
+                economicLevel: result.analysis.opportunity.categories.economicLevel,
+                industryVertical: result.analysis.opportunity.categories.industryVertical,
+                niche: result.analysis.opportunity.categories.niche,
+                developmentComplexity: result.analysis.opportunity.categories.developmentComplexity,
+                teamSize: result.analysis.opportunity.categories.teamSize,
+                capitalRequirement: result.analysis.opportunity.categories.capitalRequirement,
+                developmentTime: result.analysis.opportunity.categories.developmentTime,
+                marketSizeCategory: result.analysis.opportunity.categories.marketSizeCategory,
+                competitionLevel: result.analysis.opportunity.categories.competitionLevel,
+                marketTrend: result.analysis.opportunity.categories.marketTrend,
+                growthPotential: result.analysis.opportunity.categories.growthPotential,
+                acquisitionStrategy: result.analysis.opportunity.categories.acquisitionStrategy,
+                scalabilityType: result.analysis.opportunity.categories.scalabilityType,
+              }
+            });
+
+            // Create the opportunity source relationship
+            await prisma.opportunitySource.create({
+              data: {
+                opportunityId: opportunity.id,
+                redditPostId: post.id,
+                sourceType: "post",
+                confidence: 0.9,
+              }
+            });
+
+            console.log(`[MEGA_BATCH_AI] Successfully stored opportunity from r/${post.subreddit}: ${result.analysis.opportunity.title}`);
+          } catch (storeError) {
+            console.error(`[MEGA_BATCH_AI] Failed to store opportunity for post ${result.postId}:`, storeError);
+            errorCount++;
+            subredditStats[subreddit].failed++;
+          }
+        } else {
+          errorCount++;
+          subredditStats[subreddit].failed++;
+          console.error(`[MEGA_BATCH_AI] Analysis failed for post ${result.postId}: ${result.error}`);
+        }
+      }
+      
+      console.log(`[MEGA_BATCH_AI] Subreddit breakdown:`, subredditStats);
+      return { successCount, errorCount, subredditStats };
+    });
+
+    const result = {
+      totalPosts,
+      subredditsProcessed: subreddits.length,
+      postsAnalyzed: posts.length,
+      successCount: processedResults.successCount,
+      errorCount: processedResults.errorCount,
+      subredditStats: processedResults.subredditStats,
+    };
+    
+    console.log(`[MEGA_BATCH_AI] Mega-batch analysis completed:`, result);
     return result;
   }
 );
