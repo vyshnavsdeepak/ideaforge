@@ -303,9 +303,11 @@ export default function RedditPostsPage() {
                       by u/{post.author}
                     </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    {post.title}
-                  </h3>
+                  <Link href={`/posts/${post.id}`}>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer mb-2">
+                      {post.title}
+                    </h3>
+                  </Link>
                   <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3">
                     {post.content}
                   </p>
@@ -358,7 +360,7 @@ export default function RedditPostsPage() {
                       <div key={opp.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
                         <div className="flex-1">
                           <Link
-                            href={`/opportunities?id=${opp.id}`}
+                            href={`/opportunities/${opp.id}`}
                             className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                           >
                             {opp.title}
@@ -374,7 +376,7 @@ export default function RedditPostsPage() {
                             <span className="text-green-600 dark:text-green-400 text-xs">✅</span>
                           )}
                           <Link
-                            href={`/opportunities?id=${opp.id}`}
+                            href={`/opportunities/${opp.id}`}
                             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs"
                           >
                             View →

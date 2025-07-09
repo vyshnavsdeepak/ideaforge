@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
+import { JobTriggersPanel } from '../../components/JobTriggersPanel';
 
 interface SystemHealth {
   database: 'online' | 'offline' | 'degraded';
@@ -247,43 +247,8 @@ export default function JobsPage() {
           </div>
         </div>
 
-        {/* Manual Controls */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Manual Controls
-            </h2>
-          </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                  Reddit Scraping
-                </h3>
-                <div className="space-y-3">
-                  <TriggerScrapingButton />
-                  <button className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
-                    🔄 Trigger Mega-Batch Analysis
-                  </button>
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                  System Maintenance
-                </h3>
-                <div className="space-y-3">
-                  <button className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
-                    🧹 Clear Job History
-                  </button>
-                  <button className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600">
-                    🔄 Refresh System Status
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Manual Job Controls */}
+        <JobTriggersPanel className="mb-8" />
 
         {/* Current Jobs (Placeholder) */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">

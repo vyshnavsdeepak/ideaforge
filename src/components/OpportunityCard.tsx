@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Badge } from './ui/Badge';
 import { Delta4Radar } from './Delta4Radar';
 import { ExternalLink, TrendingUp, Users, Clock, Target, MessageSquare, ArrowBigUp, ArrowBigDown } from 'lucide-react';
@@ -91,9 +92,11 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              {opportunity.title}
-            </h3>
+            <Link href={`/opportunities/${opportunity.id}`}>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer">
+                {opportunity.title}
+              </h3>
+            </Link>
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {opportunity.redditPosts?.length || 1} source{(opportunity.redditPosts?.length || 1) > 1 ? 's' : ''}
             </span>
