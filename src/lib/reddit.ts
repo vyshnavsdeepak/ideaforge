@@ -64,34 +64,135 @@ export const TARGET_SUBREDDITS = [
   'PromptEngineering',
 ];
 
+export interface RedditAPIError extends Error {
+  status?: number;
+  retryAfter?: number;
+  isRateLimited?: boolean;
+  isBlocked?: boolean;
+}
+
 export class RedditClient {
   private readonly baseUrl = 'https://www.reddit.com';
   private readonly headers = {
     'User-Agent': 'OpportunityFinder/1.0.0 (by /u/OpportunityBot)',
+    'Accept': 'application/json',
   };
+  private readonly maxRetries = 3;
+  private readonly baseDelay = 1000; // 1 second
 
   async fetchSubredditPosts(
     subreddit: string,
     sort: 'hot' | 'new' | 'top' | 'rising' = 'hot',
     limit: number = 25
   ): Promise<ProcessedRedditPost[]> {
-    try {
-      const url = `${this.baseUrl}/r/${subreddit}/${sort}.json?limit=${limit}`;
+    const url = `${this.baseUrl}/r/${subreddit}/${sort}.json?limit=${limit}`;
+    
+    return this.retryWithBackoff(async () => {
+      // Create timeout controller for older Node.js versions
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      const response = await fetch(url, {
-        headers: this.headers,
-      });
+      try {
+        const response = await fetch(url, {
+          headers: this.headers,
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        throw new Error(`Reddit API error: ${response.status} ${response.statusText}`);
+        clearTimeout(timeoutId);
+        await this.handleResponseErrors(response, subreddit);
+        
+        const data: RedditResponse = await response.json();
+        return this.processRedditResponse(data);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        
+        // Handle network errors that don't have a response object
+        if (error instanceof Error && !('status' in error)) {
+          const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
+          networkError.isBlocked = false;
+          networkError.isRateLimited = false;
+          throw networkError;
+        }
+        
+        throw error;
+      }
+    });
+  }
+
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    attempt: number = 1
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      const redditError = error as RedditAPIError;
+      
+      // Don't retry on permanent blocks or if we've exceeded max retries
+      if (redditError.isBlocked || attempt >= this.maxRetries) {
+        throw error;
+      }
+      
+      // Don't retry network errors (not Reddit API errors)
+      if (!redditError.status) {
+        throw error;
       }
 
-      const data: RedditResponse = await response.json();
-      return this.processRedditResponse(data);
-    } catch (error) {
-      console.error(`Error fetching r/${subreddit}:`, error);
-      throw error;
+      // Calculate delay with exponential backoff
+      const delay = redditError.retryAfter || (this.baseDelay * Math.pow(2, attempt - 1));
+      
+      console.warn(`Reddit API attempt ${attempt} failed, retrying in ${delay}ms:`, (error as Error).message);
+      
+      await this.sleep(delay);
+      return this.retryWithBackoff(operation, attempt + 1);
     }
+  }
+
+  private async handleResponseErrors(response: Response, subreddit: string): Promise<void> {
+    if (response.ok) return;
+
+    const error: RedditAPIError = new Error(
+      `Reddit API error for r/${subreddit}: ${response.status} ${response.statusText}`
+    );
+    error.status = response.status;
+
+    // Handle specific error cases
+    switch (response.status) {
+      case 403:
+        error.isBlocked = true;
+        error.message = `Access blocked to r/${subreddit}. This could be due to:
+- Subreddit is private/restricted
+- Reddit is blocking requests without authentication
+- IP-based rate limiting
+- User-Agent restrictions`;
+        break;
+        
+      case 429:
+        error.isRateLimited = true;
+        const retryAfter = response.headers.get('retry-after');
+        error.retryAfter = retryAfter ? parseInt(retryAfter) * 1000 : 60000; // Default 1 minute
+        error.message = `Rate limited for r/${subreddit}. Retry after ${error.retryAfter}ms`;
+        break;
+        
+      case 404:
+        error.isBlocked = true;
+        error.message = `Subreddit r/${subreddit} not found or may be private`;
+        break;
+        
+      case 503:
+        error.message = `Reddit service unavailable. Reddit may be experiencing downtime.`;
+        error.retryAfter = 300000; // 5 minutes
+        break;
+        
+      default:
+        error.message = `Unexpected Reddit API error: ${response.status} ${response.statusText}`;
+    }
+
+    throw error;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private processRedditResponse(response: RedditResponse): ProcessedRedditPost[] {

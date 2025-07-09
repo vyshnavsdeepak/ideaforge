@@ -1,7 +1,7 @@
 import { Inngest } from "inngest";
 
 // Create Inngest client with proper environment handling for Vercel
-export const inngest = new Inngest({ 
+export const inngest = new Inngest({
   id: "reddit-opportunity-finder",
   name: "Reddit AI Opportunity Finder",
   // Only set eventKey if provided (for cloud mode)

@@ -1,5 +1,5 @@
 import { inngest } from "../lib/inngest";
-import { RedditClient, TARGET_SUBREDDITS } from "../lib/reddit";
+import { RedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
 import { 
@@ -33,38 +33,67 @@ export const scrapeSubreddit = inngest.createFunction(
     const posts = await step.run("fetch-reddit-posts", async () => {
       console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
       const client = new RedditClient();
-      const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
       
-      // If we have a cursor, filter out posts we've already seen
-      if (cursor) {
-        const cursorTime = new Date(cursor.lastCreatedUtc).getTime();
-        const beforeCount = allPosts.length;
+      try {
+        const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
         
-        // Sort posts by created time (newest first)
-        allPosts.sort((a, b) => b.createdUtc.getTime() - a.createdUtc.getTime());
-        
-        // Find where to stop based on cursor
-        const newPosts = [];
-        for (const post of allPosts) {
-          // Stop if we've reached a post older than our cursor
-          if (post.createdUtc.getTime() <= cursorTime) {
-            console.log(`[SCRAPE] Reached cursor boundary at post ${post.redditId}`);
-            break;
+        // If we have a cursor, filter out posts we've already seen
+        if (cursor) {
+          const cursorTime = new Date(cursor.lastCreatedUtc).getTime();
+          const beforeCount = allPosts.length;
+          
+          // Sort posts by created time (newest first)
+          allPosts.sort((a, b) => b.createdUtc.getTime() - a.createdUtc.getTime());
+          
+          // Find where to stop based on cursor
+          const newPosts = [];
+          for (const post of allPosts) {
+            // Stop if we've reached a post older than our cursor
+            if (post.createdUtc.getTime() <= cursorTime) {
+              console.log(`[SCRAPE] Reached cursor boundary at post ${post.redditId}`);
+              break;
+            }
+            // Also check if we've seen this exact post ID
+            if (post.redditId === cursor.lastRedditId) {
+              console.log(`[SCRAPE] Found exact cursor post ${post.redditId}`);
+              break;
+            }
+            newPosts.push(post);
           }
-          // Also check if we've seen this exact post ID
-          if (post.redditId === cursor.lastRedditId) {
-            console.log(`[SCRAPE] Found exact cursor post ${post.redditId}`);
-            break;
-          }
-          newPosts.push(post);
+          
+          console.log(`[SCRAPE] Filtered ${beforeCount} posts to ${newPosts.length} new posts using cursor`);
+          return newPosts;
         }
         
-        console.log(`[SCRAPE] Filtered ${beforeCount} posts to ${newPosts.length} new posts using cursor`);
-        return newPosts;
+        console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
+        return allPosts;
+        
+      } catch (error) {
+        const redditError = error as RedditAPIError;
+        
+        console.error(`[SCRAPE] Error fetching r/${subreddit}:`, redditError.message);
+        
+        // Handle different types of errors
+        if (redditError.isBlocked) {
+          console.warn(`[SCRAPE] Access blocked to r/${subreddit}. Skipping this subreddit.`);
+          
+          // Log the block for monitoring
+          console.log(`[SCRAPE] BLOCKED: r/${subreddit} - Status: ${redditError.status || 403}, Message: ${redditError.message}`);
+          console.log(`[SCRAPE] Will retry r/${subreddit} in 24 hours`);
+          
+          return []; // Return empty array instead of failing
+        }
+        
+        if (redditError.isRateLimited) {
+          console.warn(`[SCRAPE] Rate limited for r/${subreddit}. Will retry later.`);
+          // For rate limits, let Inngest handle the retry
+          throw error;
+        }
+        
+        // For other errors, also retry but with logging
+        console.error(`[SCRAPE] Unexpected error for r/${subreddit}:`, redditError.message);
+        throw error;
       }
-      
-      console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
-      return allPosts;
     });
 
     const storedPosts = await step.run("store-reddit-posts", async () => {

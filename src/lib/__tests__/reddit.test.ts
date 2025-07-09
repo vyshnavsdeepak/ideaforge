@@ -77,14 +77,14 @@ describe('Reddit Client', () => {
       } as Response)
 
       await expect(client.fetchSubredditPosts('nonexistent'))
-        .rejects.toThrow('Reddit API error: 404 Not Found')
+        .rejects.toThrow('Subreddit r/nonexistent not found or may be private')
     })
 
     test('handles network errors gracefully', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
 
       await expect(client.fetchSubredditPosts('test'))
-        .rejects.toThrow('Network error')
+        .rejects.toThrow('Network error accessing r/test: Network error')
     })
 
     test('filters out low-quality posts', async () => {
