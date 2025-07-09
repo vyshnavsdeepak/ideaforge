@@ -47,6 +47,16 @@ export interface OpportunityCategories {
   scalabilityType: string;
 }
 
+export interface MarketValidation {
+  marketValidationScore: number;
+  engagementLevel: 'Low' | 'Medium' | 'High' | 'Unknown';
+  problemFrequency: 'Rare' | 'Occasional' | 'Frequent' | 'Very Frequent' | 'Unknown';
+  customerType: 'Individual' | 'Business' | 'Both' | 'Unknown';
+  paymentWillingness: 'Low' | 'Medium' | 'High' | 'Unknown';
+  competitiveAnalysis: 'No Competition' | 'Low Competition' | 'Medium Competition' | 'High Competition' | 'Unknown';
+  validationTier: 'Tier 1 (Build Now)' | 'Tier 2 (Validate Further)' | 'Tier 3 (Monitor)' | 'Unknown';
+}
+
 export interface OpportunityAnalysis {
   title: string;
   description: string;
@@ -61,6 +71,7 @@ export interface OpportunityAnalysis {
   complexity: 'Low' | 'Medium' | 'High';
   successProbability: 'Low' | 'Medium' | 'High';
   categories: OpportunityCategories;
+  marketValidation: MarketValidation;
   reasoning: {
     speed: string;
     convenience: string;
@@ -146,6 +157,15 @@ export const opportunitySchema = z.object({
       acquisitionStrategy: z.string(),
       scalabilityType: z.string(),
     }),
+    marketValidation: z.object({
+      marketValidationScore: z.number().min(0).max(10),
+      engagementLevel: z.enum(['Low', 'Medium', 'High', 'Unknown']),
+      problemFrequency: z.enum(['Rare', 'Occasional', 'Frequent', 'Very Frequent', 'Unknown']),
+      customerType: z.enum(['Individual', 'Business', 'Both', 'Unknown']),
+      paymentWillingness: z.enum(['Low', 'Medium', 'High', 'Unknown']),
+      competitiveAnalysis: z.enum(['No Competition', 'Low Competition', 'Medium Competition', 'High Competition', 'Unknown']),
+      validationTier: z.enum(['Tier 1 (Build Now)', 'Tier 2 (Validate Further)', 'Tier 3 (Monitor)', 'Unknown']),
+    }),
     reasoning: z.object({
       speed: z.string(),
       convenience: z.string(),
@@ -213,6 +233,7 @@ export class Delta4Analyzer {
               complexity: 'Low' | 'Medium' | 'High';
               successProbability: 'Low' | 'Medium' | 'High';
               categories: OpportunityCategories;
+              marketValidation: MarketValidation;
               reasoning: {
                 speed: string;
                 convenience: string;
@@ -313,7 +334,15 @@ ${this.getSubredditSpecificPrompt(request.subreddit)}
    - Target Audience: Small Business
    - Capital Requirements: Low
 
-5. **Viability Assessment:** Average score 7.4/10 → Highly viable opportunity
+5. **Market Validation Analysis:**
+   - Engagement Level: High (247 comments, 89% upvoted)
+   - Problem Frequency: Very Frequent (daily pain point)
+   - Customer Type: Business (e-commerce store owners)
+   - Payment Willingness: High (mentions current expensive copywriter)
+   - Competitive Analysis: Medium Competition (some tools exist but not optimized)
+   - Validation Tier: Tier 1 (Build Now) - High demand + clear willingness to pay
+
+6. **Viability Assessment:** Average score 7.4/10 → Highly viable opportunity
 
 **Task:**
 Follow the same step-by-step approach for this Reddit post:
@@ -321,13 +350,29 @@ Follow the same step-by-step approach for this Reddit post:
 **Step 1:** Identify the core problem mentioned in the post
 **Step 2:** Suggest a potential AI-driven solution
 **Step 3:** Evaluate the solution using Delta 4 theory (provide detailed reasoning for each dimension)
-**Step 4:** Categorize the business opportunity across all dimensions
-**Step 5:** Assess overall viability and provide comprehensive analysis
+**Step 4:** Analyze market validation using the provided criteria
+**Step 5:** Categorize the business opportunity across all dimensions
+**Step 6:** Assess overall viability and provide comprehensive analysis
+
+**Software/Tech Requirements:**
+- Must be solvable with SOFTWARE (SaaS, web app, mobile app, API, platform)
+- Must target DIGITAL customers (not physical services)
+- Must be SCALABLE through code (not human-intensive)
+- Must have RECURRING revenue potential
+- Exclude: hardware, physical products, pure consulting, one-time services
+
+**Market Validation Criteria:**
+- Subreddit engagement level (comments, upvotes indicate demand)
+- Frequency of similar posts (recurring problem = larger market)
+- User type analysis (individual vs business customers)
+- Willingness to pay indicators ("I'd pay for...", "expensive to...")
+- Competitive landscape analysis (existing solutions mentioned)
 
 **Requirements:**
-- Only identify real problems with clear customer pain points
-- Focus on opportunities where AI provides substantial (4+) improvement
-- Consider market size, implementation feasibility, and existing validation
+- Only identify SOFTWARE/TECH problems with clear customer pain points
+- Focus on opportunities where AI-powered SOFTWARE provides substantial (4+) improvement
+- Must be buildable as a SaaS, web app, mobile app, or software tool
+- Consider digital market size, implementation feasibility, and existing validation
 - Provide specific reasoning that references the Reddit post content
 - Use context clues and business logic for ALL categorizations
 - Overall viability threshold is 4+ average Delta 4 score
@@ -352,6 +397,7 @@ If this is a viable opportunity, provide the complete analysis with full categor
       complexity: 'Low' | 'Medium' | 'High';
       successProbability: 'Low' | 'Medium' | 'High';
       categories: OpportunityCategories;
+      marketValidation: MarketValidation;
       reasoning: {
         speed: string;
         convenience: string;
@@ -395,6 +441,7 @@ If this is a viable opportunity, provide the complete analysis with full categor
         complexity: opportunity.complexity,
         successProbability: opportunity.successProbability,
         categories: opportunity.categories,
+        marketValidation: opportunity.marketValidation,
         reasoning: opportunity.reasoning,
       },
     };

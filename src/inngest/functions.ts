@@ -504,6 +504,15 @@ export const analyzeOpportunity = inngest.createFunction(
             acquisitionStrategy: opp.categories.acquisitionStrategy,
             scalabilityType: opp.categories.scalabilityType,
             
+            // Market Validation Fields
+            marketValidationScore: opp.marketValidation.marketValidationScore,
+            engagementLevel: opp.marketValidation.engagementLevel,
+            problemFrequency: opp.marketValidation.problemFrequency,
+            customerType: opp.marketValidation.customerType,
+            paymentWillingness: opp.marketValidation.paymentWillingness,
+            competitiveAnalysis: opp.marketValidation.competitiveAnalysis,
+            validationTier: opp.marketValidation.validationTier,
+            
             // Create initial source link
             redditPosts: {
               create: {
@@ -555,10 +564,16 @@ export const analyzeOpportunity = inngest.createFunction(
       };
     }
 
-    await step.run("mark-post-processed", async () => {
+    await step.run("mark-post-processed-as-rejected", async () => {
       await prisma.redditPost.update({
         where: { id: postId },
-        data: { processedAt: new Date() }
+        data: { 
+          processedAt: new Date(),
+          isOpportunity: false,
+          rejectionReasons: analysis?.reasons || ["No opportunity identified"],
+          aiConfidence: analysis?.confidence || 0.0,
+          aiAnalysisDate: new Date()
+        }
       });
     });
 
@@ -1074,6 +1089,15 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
                 growthPotential: result.analysis.opportunity.categories.growthPotential,
                 acquisitionStrategy: result.analysis.opportunity.categories.acquisitionStrategy,
                 scalabilityType: result.analysis.opportunity.categories.scalabilityType,
+                
+                // Market Validation Fields
+                marketValidationScore: result.analysis.opportunity.marketValidation.marketValidationScore,
+                engagementLevel: result.analysis.opportunity.marketValidation.engagementLevel,
+                problemFrequency: result.analysis.opportunity.marketValidation.problemFrequency,
+                customerType: result.analysis.opportunity.marketValidation.customerType,
+                paymentWillingness: result.analysis.opportunity.marketValidation.paymentWillingness,
+                competitiveAnalysis: result.analysis.opportunity.marketValidation.competitiveAnalysis,
+                validationTier: result.analysis.opportunity.marketValidation.validationTier,
               }
             });
 

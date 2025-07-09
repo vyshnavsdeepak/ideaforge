@@ -77,6 +77,13 @@ model RedditPost {
   createdUtc      DateTime
   processedAt     DateTime?
   processingError String?  @db.Text
+  
+  // AI Analysis Results (for rejected posts)
+  isOpportunity   Boolean? // true = opportunity, false = rejected, null = not processed
+  rejectionReasons String[] @default([]) // Array of rejection reasons
+  aiConfidence    Float?   // AI confidence score (0-1)
+  aiAnalysisDate  DateTime? // When AI analysis was completed
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -172,6 +179,15 @@ model Opportunity {
   growthPotential      String?  @default("Unknown")        // Linear, Exponential, Network Effects
   acquisitionStrategy  String?  @default("Unknown")        // Viral, Word-of-Mouth, Paid, Organic
   scalabilityType      String?  @default("Unknown")        // Scalable, Service-Heavy, Location-Dependent
+  
+  // Market Validation Fields
+  marketValidationScore Float?  @default(0.0)            // 0-10 score based on validation criteria
+  engagementLevel      String?  @default("Unknown")      // Low, Medium, High (based on comments/upvotes)
+  problemFrequency     String?  @default("Unknown")      // Rare, Occasional, Frequent, Very Frequent
+  customerType         String?  @default("Unknown")      // Individual, Business, Both
+  paymentWillingness   String?  @default("Unknown")      // Low, Medium, High (based on payment indicators)
+  competitiveAnalysis  String?  @default("Unknown")      // No Competition, Low Competition, Medium Competition, High Competition
+  validationTier       String?  @default("Unknown")      // Tier 1 (Build Now), Tier 2 (Validate Further), Tier 3 (Monitor)
   
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

@@ -109,6 +109,15 @@ const batchAnalysisSchema = z.object({
             acquisitionStrategy: z.string(),
             scalabilityType: z.string(),
           }),
+          marketValidation: z.object({
+            marketValidationScore: z.number().min(0).max(10),
+            engagementLevel: z.enum(['Low', 'Medium', 'High', 'Unknown']),
+            problemFrequency: z.enum(['Rare', 'Occasional', 'Frequent', 'Very Frequent', 'Unknown']),
+            customerType: z.enum(['Individual', 'Business', 'Both', 'Unknown']),
+            paymentWillingness: z.enum(['Low', 'Medium', 'High', 'Unknown']),
+            competitiveAnalysis: z.enum(['No Competition', 'Low Competition', 'Medium Competition', 'High Competition', 'Unknown']),
+            validationTier: z.enum(['Tier 1 (Build Now)', 'Tier 2 (Validate Further)', 'Tier 3 (Monitor)', 'Unknown']),
+          }),
           reasoning: z.object({
             speed: z.string(),
             convenience: z.string(),
@@ -316,6 +325,16 @@ Return analyses in the exact same order as the input posts.
         overallScore: calculateOverallScore(analysis.analysis.opportunity.delta4Scores),
         // Set viability threshold based on overall score
         viabilityThreshold: calculateOverallScore(analysis.analysis.opportunity.delta4Scores) >= 4.0,
+        // Ensure marketValidation is present with defaults if missing
+        marketValidation: analysis.analysis.opportunity.marketValidation || {
+          marketValidationScore: 0,
+          engagementLevel: 'Unknown' as const,
+          problemFrequency: 'Unknown' as const,
+          customerType: 'Unknown' as const,
+          paymentWillingness: 'Unknown' as const,
+          competitiveAnalysis: 'Unknown' as const,
+          validationTier: 'Unknown' as const,
+        },
       } : undefined,
       reasons: analysis.analysis.reasons,
     } : undefined;
@@ -490,6 +509,16 @@ Return analyses in the exact same order as the input posts.
         overallScore: calculateOverallScore(analysis.analysis.opportunity.delta4Scores),
         // Set viability threshold based on overall score
         viabilityThreshold: calculateOverallScore(analysis.analysis.opportunity.delta4Scores) >= 4.0,
+        // Ensure marketValidation is present with defaults if missing
+        marketValidation: analysis.analysis.opportunity.marketValidation || {
+          marketValidationScore: 0,
+          engagementLevel: 'Unknown' as const,
+          problemFrequency: 'Unknown' as const,
+          customerType: 'Unknown' as const,
+          paymentWillingness: 'Unknown' as const,
+          competitiveAnalysis: 'Unknown' as const,
+          validationTier: 'Unknown' as const,
+        },
       } : undefined,
       reasons: analysis.analysis.reasons,
     } : undefined;
