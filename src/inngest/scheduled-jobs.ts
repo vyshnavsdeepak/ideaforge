@@ -199,29 +199,24 @@ export const batchAIProcessor = inngest.createFunction(
       return { processed: 0, message: 'No unprocessed posts found' };
     }
     
-    // Group posts by subreddit for better analysis context
-    const postsBySubreddit = unprocessedPosts.reduce((groups, post) => {
-      if (!groups[post.subreddit]) {
-        groups[post.subreddit] = [];
-      }
-      groups[post.subreddit].push(post);
-      return groups;
-    }, {} as Record<string, typeof unprocessedPosts>);
-    
-    // Process each subreddit's posts
-    const results = await step.run("process-subreddit-batches", async () => {
+    // Process posts in efficient batches regardless of subreddit
+    const batchSize = 25; // Process 25 posts per batch
+    const results = await step.run("process-efficient-batches", async () => {
       const batchResults = [];
       
-      for (const [subreddit, posts] of Object.entries(postsBySubreddit)) {
-        console.log(`[BATCH_AI_PROCESSOR] Processing ${posts.length} posts from r/${subreddit}`);
+      for (let i = 0; i < unprocessedPosts.length; i += batchSize) {
+        const batch = unprocessedPosts.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        
+        console.log(`[BATCH_AI_PROCESSOR] Processing batch ${batchNumber} with ${batch.length} posts`);
         
         try {
           // Send batch analysis event
           const batchEvent = await inngest.send({
             name: "ai/batch-analyze.opportunities",
             data: {
-              subreddit,
-              posts: posts.map(post => ({
+              subreddit: "mixed", // Indicate this is a mixed batch
+              posts: batch.map(post => ({
                 postId: post.id,
                 postTitle: post.title,
                 postContent: post.content || '',
@@ -232,25 +227,28 @@ export const batchAIProcessor = inngest.createFunction(
               })),
               triggeredBy: "scheduled-batch-processor",
               batchInfo: {
-                totalPosts: posts.length,
-                subreddit,
+                batchNumber,
+                totalBatches: Math.ceil(unprocessedPosts.length / batchSize),
+                postsInBatch: batch.length,
+                totalPosts: unprocessedPosts.length,
+                isMixedSubreddits: true,
                 timestamp: new Date().toISOString(),
               }
             }
           });
           
           batchResults.push({
-            subreddit,
-            postsQueued: posts.length,
+            batchNumber,
+            postsQueued: batch.length,
             eventId: batchEvent.ids[0],
             success: true,
           });
           
-          console.log(`[BATCH_AI_PROCESSOR] Queued ${posts.length} posts from r/${subreddit} for analysis`);
+          console.log(`[BATCH_AI_PROCESSOR] Queued batch ${batchNumber} with ${batch.length} posts for analysis`);
         } catch (error) {
-          console.error(`[BATCH_AI_PROCESSOR] Failed to queue posts from r/${subreddit}:`, error);
+          console.error(`[BATCH_AI_PROCESSOR] Failed to queue batch ${batchNumber}:`, error);
           batchResults.push({
-            subreddit,
+            batchNumber,
             postsQueued: 0,
             error: error instanceof Error ? error.message : 'Unknown error',
             success: false,
@@ -264,12 +262,12 @@ export const batchAIProcessor = inngest.createFunction(
     const totalProcessed = results.reduce((sum, result) => sum + (result.postsQueued || 0), 0);
     const successfulBatches = results.filter(r => r.success).length;
     
-    console.log(`[BATCH_AI_PROCESSOR] Completed: ${totalProcessed} posts queued across ${successfulBatches} subreddits`);
+    console.log(`[BATCH_AI_PROCESSOR] Completed: ${totalProcessed} posts queued in ${successfulBatches} batches`);
     
     return {
       processed: totalProcessed,
-      subredditsProcessed: successfulBatches,
-      totalSubreddits: Object.keys(postsBySubreddit).length,
+      batchesTriggered: results.length,
+      successfulBatches,
       results,
     };
   }

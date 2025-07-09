@@ -74,29 +74,21 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
               />
               
               <JobTriggerButton
-                endpoint="/api/inngest"
-                label="Reprocess Failed Posts"
-                icon="🔄"
-                description="Retry AI analysis for failed posts"
-                variant="secondary"
+                endpoint="/api/admin/process-batch-ai"
+                label="Process Batch AI Now"
+                icon="🤖"
+                description="Immediate AI analysis of all unprocessed posts (up to 200)"
+                variant="primary"
                 requireAuth={true}
-                payload={{
-                  name: 'ai/batch-analyze.opportunities',
-                  data: { type: 'failed' }
-                }}
               />
               
               <JobTriggerButton
-                endpoint="/api/inngest"
-                label="Full Mega-Batch Analysis"
-                icon="⚡"
-                description="Run complete AI analysis pipeline"
-                variant="primary"
+                endpoint="/api/admin/reprocess-failed-posts"
+                label="Reprocess Failed Posts"
+                icon="🔄"
+                description="Retry AI analysis for posts with processing errors"
+                variant="secondary"
                 requireAuth={true}
-                payload={{
-                  name: 'ai/mega-batch-analyze.opportunities',
-                  data: { force: true }
-                }}
               />
             </div>
           </div>
@@ -108,29 +100,20 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
             </h3>
             <div className="space-y-3">
               <JobTriggerButton
-                endpoint="/api/admin/deduplication"
-                label="Cleanup Duplicates"
-                icon="🧹"
-                description="Remove duplicate posts and opportunities"
-                variant="secondary"
-                requireAuth={true}
-                payload={{ action: 'cleanup' }}
-              />
-              
-              <JobTriggerButton
-                endpoint="/api/admin/fix-urls"
-                label="Fix Reddit URLs"
-                icon="🔗"
-                description="Fix malformed permalink URLs"
-                variant="secondary"
-                requireAuth={false}
-              />
-              
-              <JobTriggerButton
                 endpoint="/api/admin/system-health"
                 label="System Health Check"
                 icon="❤️"
-                description="Check all system components"
+                description="Check database, AI models, and system status"
+                variant="secondary"
+                requireAuth={true}
+                method="GET"
+              />
+              
+              <JobTriggerButton
+                endpoint="/api/analytics/ai-costs"
+                label="View AI Cost Analytics"
+                icon="💰"
+                description="Check current AI usage and costs"
                 variant="secondary"
                 requireAuth={true}
                 method="GET"
@@ -156,32 +139,34 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
               />
               
               <JobTriggerButton
-                endpoint="/api/admin/clear-cache"
-                label="Clear System Cache"
-                icon="🗑️"
-                description="Clear all cached data and temporary files"
-                variant="danger"
+                endpoint="/api/admin/aggregate-daily-usage"
+                label="Aggregate Daily Usage"
+                icon="📊"
+                description="Manually trigger daily AI usage aggregation"
+                variant="secondary"
                 requireAuth={true}
+                payload={{ action: 'aggregate' }}
               />
             </div>
             
             <div className="space-y-3">
               <JobTriggerButton
-                endpoint="/api/admin/rebuild-indexes"
-                label="Rebuild Database Indexes"
-                icon="📊"
-                description="Rebuild all database indexes for better performance"
+                endpoint="/api/trigger-mega-scraping"
+                label="Emergency Mega-Scraping"
+                icon="🚨"
+                description="Trigger comprehensive scraping of all subreddits"
                 variant="danger"
                 requireAuth={true}
               />
               
               <JobTriggerButton
-                endpoint="/api/admin/force-sync"
-                label="Force Data Sync"
-                icon="🔄"
-                description="Force synchronization of all data relationships"
+                endpoint="/api/admin/process-batch-ai"
+                label="Force Batch Processing"
+                icon="⚡"
+                description="Force immediate processing of all unprocessed posts"
                 variant="danger"
                 requireAuth={true}
+                method="GET"
               />
             </div>
           </div>

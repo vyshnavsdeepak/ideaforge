@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { inngest } from '../../../../lib/inngest';
 import { prisma } from '../../../../lib/prisma';
+import { inngest } from '../../../../lib/inngest';
 
 export async function POST() {
   try {
@@ -11,45 +11,48 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('[MANUAL_BATCH_AI] Manual batch AI processing triggered');
+    console.log('[REPROCESS_FAILED] Finding posts with processing errors');
 
-    // Get count of unprocessed posts
-    const unprocessedCount = await prisma.redditPost.count({
+    // Find posts with processing errors
+    const failedPosts = await prisma.redditPost.findMany({
       where: {
         processedAt: null,
-        processingError: null,
-      },
-    });
-
-    if (unprocessedCount === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'No unprocessed posts found',
-        postsQueued: 0,
-      });
-    }
-
-    // Find all unprocessed posts
-    const unprocessedPosts = await prisma.redditPost.findMany({
-      where: {
-        processedAt: null,
-        processingError: null,
+        processingError: { not: null },
       },
       orderBy: {
         createdAt: 'desc'
       },
-      take: 200, // Process up to 200 posts at a time
+      take: 100, // Process up to 100 failed posts
+    });
+
+    if (failedPosts.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No failed posts found to reprocess',
+        postsReprocessed: 0,
+      });
+    }
+
+    console.log(`[REPROCESS_FAILED] Found ${failedPosts.length} failed posts to reprocess`);
+
+    // Clear processing errors to allow reprocessing
+    await prisma.redditPost.updateMany({
+      where: {
+        id: { in: failedPosts.map(p => p.id) },
+      },
+      data: {
+        processingError: null,
+        updatedAt: new Date(),
+      },
     });
 
     // Process posts in efficient batches regardless of subreddit
     const batchSize = 25; // Process 25 posts per batch
     const batchResults = [];
     
-    for (let i = 0; i < unprocessedPosts.length; i += batchSize) {
-      const batch = unprocessedPosts.slice(i, i + batchSize);
+    for (let i = 0; i < failedPosts.length; i += batchSize) {
+      const batch = failedPosts.slice(i, i + batchSize);
       const batchNumber = Math.floor(i / batchSize) + 1;
-      
-      console.log(`[MANUAL_BATCH_AI] Processing batch ${batchNumber} with ${batch.length} posts`);
       
       try {
         // Send batch analysis event
@@ -66,12 +69,13 @@ export async function POST() {
               score: post.score,
               numComments: post.numComments,
             })),
-            triggeredBy: "manual-admin-trigger",
+            triggeredBy: "reprocess-failed-posts",
             batchInfo: {
               batchNumber,
-              totalBatches: Math.ceil(unprocessedPosts.length / batchSize),
+              totalBatches: Math.ceil(failedPosts.length / batchSize),
               postsInBatch: batch.length,
-              totalPosts: unprocessedPosts.length,
+              totalPosts: failedPosts.length,
+              isRetry: true,
               isMixedSubreddits: true,
               timestamp: new Date().toISOString(),
             }
@@ -80,41 +84,42 @@ export async function POST() {
         
         batchResults.push({
           batchNumber,
-          postsQueued: batch.length,
+          postsReprocessed: batch.length,
           eventId: batchEvent.ids[0],
           success: true,
         });
         
-        console.log(`[MANUAL_BATCH_AI] Queued batch ${batchNumber} with ${batch.length} posts for analysis`);
+        console.log(`[REPROCESS_FAILED] Triggered batch ${batchNumber} with ${batch.length} posts`);
+        
       } catch (error) {
-        console.error(`[MANUAL_BATCH_AI] Failed to queue batch ${batchNumber}:`, error);
+        console.error(`[REPROCESS_FAILED] Failed to reprocess batch ${batchNumber}:`, error);
         batchResults.push({
           batchNumber,
-          postsQueued: 0,
+          postsReprocessed: 0,
           error: error instanceof Error ? error.message : 'Unknown error',
           success: false,
         });
       }
     }
 
-    const totalProcessed = batchResults.reduce((sum, result) => sum + (result.postsQueued || 0), 0);
+    const totalReprocessed = batchResults.reduce((sum, result) => sum + (result.postsReprocessed || 0), 0);
     const successfulBatches = batchResults.filter(r => r.success).length;
 
-    console.log(`[MANUAL_BATCH_AI] Completed: ${totalProcessed} posts queued in ${successfulBatches} batches`);
+    console.log(`[REPROCESS_FAILED] Reprocessed ${totalReprocessed} posts in ${successfulBatches} batches`);
 
     return NextResponse.json({
       success: true,
-      message: `Queued ${totalProcessed} posts for batch AI analysis in ${batchResults.length} batches`,
-      postsQueued: totalProcessed,
+      message: `Reprocessing ${totalReprocessed} failed posts in ${batchResults.length} batches`,
+      postsReprocessed: totalReprocessed,
       batchesTriggered: batchResults.length,
       successfulBatches,
       results: batchResults,
     });
   } catch (error) {
-    console.error('[MANUAL_BATCH_AI] Error:', error);
+    console.error('[REPROCESS_FAILED] Error:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to trigger batch AI processing',
+        error: 'Failed to reprocess failed posts',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
@@ -130,12 +135,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get count of unprocessed posts by subreddit
-    const unprocessedStats = await prisma.redditPost.groupBy({
+    // Get count of failed posts by subreddit
+    const failedStats = await prisma.redditPost.groupBy({
       by: ['subreddit'],
       where: {
         processedAt: null,
-        processingError: null,
+        processingError: { not: null },
       },
       _count: {
         id: true,
@@ -147,20 +152,20 @@ export async function GET() {
       },
     });
 
-    const totalUnprocessed = unprocessedStats.reduce((sum, stat) => sum + stat._count.id, 0);
+    const totalFailed = failedStats.reduce((sum, stat) => sum + stat._count.id, 0);
 
     return NextResponse.json({
-      totalUnprocessed,
-      subredditBreakdown: unprocessedStats.map(stat => ({
+      totalFailed,
+      subredditBreakdown: failedStats.map(stat => ({
         subreddit: stat.subreddit,
         count: stat._count.id,
       })),
     });
   } catch (error) {
-    console.error('[MANUAL_BATCH_AI] Error fetching status:', error);
+    console.error('[REPROCESS_FAILED] Error fetching failed posts:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to fetch batch AI status',
+        error: 'Failed to fetch failed posts info',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
