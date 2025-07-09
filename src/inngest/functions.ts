@@ -868,9 +868,9 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
         throw new Error(`Invalid posts data: ${posts ? `Array with ${posts.length} items` : 'null/undefined'}`);
       }
       
-      // Validate post structure
+      // Validate post structure - content can be empty/null for image/link posts
       const invalidPosts = posts.filter(post => 
-        !post.postId || !post.postTitle || !post.postContent || !post.subreddit
+        !post.postId || !post.postTitle || !post.subreddit
       );
       
       if (invalidPosts.length > 0) {
