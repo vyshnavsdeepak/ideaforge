@@ -32,7 +32,13 @@ export const scrapeSubreddit = inngest.createFunction(
       console.log(`[SCRAPE] Cursor for r/${subreddit}:`, existingCursor ? 
         `Last ID: ${existingCursor.lastRedditId}, Last time: ${existingCursor.lastCreatedUtc}` : 
         'No cursor found (first scrape)');
-      return existingCursor;
+      return {
+        hasCursor: !!existingCursor,
+        lastRedditId: existingCursor?.lastRedditId || null,
+        lastCreatedUtc: existingCursor?.lastCreatedUtc || null,
+        postsProcessed: existingCursor?.postsProcessed || 0,
+        cursor: existingCursor
+      };
     });
 
     const posts = await step.run("fetch-reddit-posts", async () => {
@@ -43,8 +49,8 @@ export const scrapeSubreddit = inngest.createFunction(
         const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);
         
         // If we have a cursor, filter out posts we've already seen
-        if (cursor) {
-          const cursorTime = new Date(cursor.lastCreatedUtc).getTime();
+        if (cursor.hasCursor && cursor.cursor) {
+          const cursorTime = new Date(cursor.cursor.lastCreatedUtc).getTime();
           const beforeCount = allPosts.length;
           
           // Sort posts by created time (newest first)
@@ -53,13 +59,15 @@ export const scrapeSubreddit = inngest.createFunction(
           // Find where to stop based on cursor
           const newPosts = [];
           for (const post of allPosts) {
+            if (!post) continue; // Skip null posts
+            
             // Stop if we've reached a post older than our cursor
             if (post.createdUtc.getTime() <= cursorTime) {
               console.log(`[SCRAPE] Reached cursor boundary at post ${post.redditId}`);
               break;
             }
             // Also check if we've seen this exact post ID
-            if (post.redditId === cursor.lastRedditId) {
+            if (post.redditId === cursor.cursor.lastRedditId) {
               console.log(`[SCRAPE] Found exact cursor post ${post.redditId}`);
               break;
             }
@@ -67,11 +75,25 @@ export const scrapeSubreddit = inngest.createFunction(
           }
           
           console.log(`[SCRAPE] Filtered ${beforeCount} posts to ${newPosts.length} new posts using cursor`);
-          return newPosts;
+          return {
+            posts: newPosts,
+            totalFetched: beforeCount,
+            filtered: beforeCount - newPosts.length,
+            usedCursor: true,
+            cursorTime: cursor.cursor.lastCreatedUtc,
+            error: null
+          };
         }
         
         console.log(`[SCRAPE] Fetched ${allPosts.length} posts from r/${subreddit} (no cursor)`);
-        return allPosts;
+        return {
+          posts: allPosts,
+          totalFetched: allPosts.length,
+          filtered: 0,
+          usedCursor: false,
+          cursorTime: null,
+          error: null
+        };
         
       } catch (error) {
         const redditError = error as RedditAPIError;
@@ -86,7 +108,14 @@ export const scrapeSubreddit = inngest.createFunction(
           console.log(`[SCRAPE] BLOCKED: r/${subreddit} - Status: ${redditError.status || 403}, Message: ${redditError.message}`);
           console.log(`[SCRAPE] Will retry r/${subreddit} in 24 hours`);
           
-          return []; // Return empty array instead of failing
+          return {
+            posts: [],
+            totalFetched: 0,
+            filtered: 0,
+            usedCursor: false,
+            error: 'blocked',
+            message: 'Subreddit access blocked'
+          };
         }
         
         if (redditError.isRateLimited) {
@@ -102,12 +131,17 @@ export const scrapeSubreddit = inngest.createFunction(
     });
 
     const storedPosts = await step.run("store-reddit-posts", async () => {
-      console.log(`[SCRAPE] Processing ${posts.length} posts for storage with enhanced deduplication`);
+      console.log(`[SCRAPE] Processing ${posts.posts.length} posts for storage with enhanced deduplication`);
       const newPosts = [];
       const updatedPosts = [];
       const skippedPosts = [];
       
-      for (const post of posts) {
+      for (const post of posts.posts) {
+        if (!post) {
+          console.warn(`[SCRAPE] Encountered null post, skipping`);
+          continue;
+        }
+        
         console.log(`[SCRAPE] Checking post ${post.redditId}: ${post.title.substring(0, 50)}...`);
         
         // Enhanced deduplication check
@@ -175,51 +209,100 @@ export const scrapeSubreddit = inngest.createFunction(
         console.log(`[SCRAPE] Skipped reasons:`, skippedPosts.map(p => p.reason));
       }
       
-      return newPosts;
+      return {
+        newPosts,
+        totalProcessed: posts.posts.length,
+        newPostsCount: newPosts.length,
+        updatedPostsCount: updatedPosts.length,
+        skippedPostsCount: skippedPosts.length,
+        skippedReasons: skippedPosts.slice(0, 5).map(p => p.reason),
+        duplicateTypes: [...new Set(skippedPosts.map(p => p.reason))]
+      };
     });
 
-    // Posts will be processed by the scheduled batch processor
-    if (storedPosts.length > 0) {
-      console.log(`[SCRAPE] Stored ${storedPosts.length} new posts for batch processing`);
-    } else {
-      console.log(`[SCRAPE] No new posts to analyze`);
-    }
+    // Trigger immediate AI processing for stored posts
+    const aiProcessingResult = storedPosts.newPostsCount > 0 ? await step.run("trigger-immediate-ai-processing", async () => {
+        console.log(`[SCRAPE] Triggering immediate AI processing for ${storedPosts.newPostsCount} new posts`);
+        
+        const batchPosts = storedPosts.newPosts.map(post => ({
+          postId: post.id,
+          postTitle: post.title,
+          postContent: post.content || '',
+          subreddit: post.subreddit,
+          author: post.author,
+          score: post.score,
+          numComments: post.numComments,
+        }));
+        
+        await inngest.send({
+          name: "ai/batch-analyze.opportunities",
+          data: {
+            subreddit,
+            posts: batchPosts,
+            triggeredBy: "immediate-scrape-processing",
+            batchInfo: {
+              batchNumber: 1,
+              totalBatches: 1,
+              postsInBatch: storedPosts.newPostsCount,
+              totalPosts: storedPosts.newPostsCount,
+              isImmediateProcessing: true,
+              timestamp: new Date().toISOString(),
+            }
+          }
+        });
+        
+        console.log(`[SCRAPE] AI processing event sent for ${storedPosts.newPostsCount} posts from r/${subreddit}`);
+        return { 
+          aiTriggered: true,
+          postsQueued: storedPosts.newPostsCount,
+          eventSent: true
+        };
+      }) : {
+        aiTriggered: false,
+        postsQueued: 0,
+        reason: 'No new posts to process'
+      };
 
     // Update cursor if we processed any posts
-    const cursorUpdateResult = posts.length > 0 ? await step.run("update-subreddit-cursor", async () => {
+    const cursorUpdateResult = posts.posts.length > 0 ? await step.run("update-subreddit-cursor", async () => {
       // Find the newest post we processed
-      const newestPost = posts.reduce((newest, post) => 
-        new Date(post.createdUtc).getTime() > new Date(newest.createdUtc).getTime() ? post : newest
-      , posts[0]);
+      const validPosts = posts.posts.filter(post => post !== null);
+      if (validPosts.length === 0) {
+        throw new Error("No valid posts to update cursor");
+      }
       
-      console.log(`[SCRAPE] Updating cursor for r/${subreddit} to post ${newestPost.redditId} at ${newestPost.createdUtc}`);
+      const newestPost = validPosts.reduce((newest, post) => 
+        new Date(post!.createdUtc).getTime() > new Date(newest!.createdUtc).getTime() ? post : newest
+      , validPosts[0]);
+      
+      console.log(`[SCRAPE] Updating cursor for r/${subreddit} to post ${newestPost!.redditId} at ${newestPost!.createdUtc}`);
       
       const cursorData = await prisma.subredditCursor.upsert({
         where: { subreddit },
         update: {
-          lastRedditId: newestPost.redditId,
-          lastCreatedUtc: newestPost.createdUtc,
-          postsProcessed: { increment: posts.length },
+          lastRedditId: newestPost!.redditId,
+          lastCreatedUtc: newestPost!.createdUtc,
+          postsProcessed: { increment: posts.posts.length },
           updatedAt: new Date()
         },
         create: {
           subreddit,
-          lastRedditId: newestPost.redditId,
-          lastCreatedUtc: newestPost.createdUtc,
-          postsProcessed: posts.length
+          lastRedditId: newestPost!.redditId,
+          lastCreatedUtc: newestPost!.createdUtc,
+          postsProcessed: posts.posts.length
         }
       });
       
       const updateResult = {
         subreddit,
         previousCursor: cursorData.lastRedditId,
-        newCursor: newestPost.redditId,
-        newCursorDate: newestPost.createdUtc,
-        postsProcessedThisRun: posts.length,
+        newCursor: newestPost!.redditId,
+        newCursorDate: newestPost!.createdUtc,
+        postsProcessedThisRun: posts.posts.length,
         totalPostsProcessed: cursorData.postsProcessed,
-        cursorAdvancedBy: posts.length,
-        oldestPostInBatch: posts[posts.length - 1]?.redditId,
-        newestPostInBatch: newestPost.redditId,
+        cursorAdvancedBy: posts.posts.length,
+        oldestPostInBatch: validPosts[validPosts.length - 1]?.redditId,
+        newestPostInBatch: newestPost!.redditId,
       };
       
       console.log(`[SCRAPE] Cursor update completed:`, updateResult);
@@ -228,15 +311,27 @@ export const scrapeSubreddit = inngest.createFunction(
       subreddit, 
       skipped: true, 
       reason: 'No posts processed',
-      postsReceived: posts.length
+      postsReceived: posts.posts?.length || 0,
+      wasBlocked: posts.error === 'blocked'
     };
 
     const result = { 
       subreddit, 
-      totalPosts: posts.length, 
-      newPosts: storedPosts.length,
+      fetchResult: {
+        totalFetched: posts.totalFetched,
+        filtered: posts.filtered,
+        usedCursor: posts.usedCursor,
+        wasBlocked: posts.error === 'blocked'
+      },
+      storageResult: {
+        totalProcessed: storedPosts.totalProcessed,
+        newPosts: storedPosts.newPostsCount,
+        updated: storedPosts.updatedPostsCount,
+        skipped: storedPosts.skippedPostsCount,
+        duplicateTypes: storedPosts.duplicateTypes
+      },
+      aiProcessingResult,
       cursorUpdate: cursorUpdateResult,
-      batchAnalysisTriggered: storedPosts.length > 0,
     };
     console.log(`[SCRAPE] Completed scrape:`, result);
     return result;
@@ -626,16 +721,15 @@ export const scrapeAllSubreddits = inngest.createFunction(
       return newPosts;
     });
 
-    // Trigger mega-batch AI analysis for all posts
+    // Trigger immediate AI analysis for all posts
     if (storedPosts.length > 0) {
-      await step.run("trigger-mega-batch-ai-analysis", async () => {
-        console.log(`[MEGA_SCRAPE] Triggering mega-batch AI analysis for ${storedPosts.length} posts across all subreddits`);
+      await step.run("trigger-immediate-ai-analysis", async () => {
+        console.log(`[MEGA_SCRAPE] Triggering immediate AI analysis for ${storedPosts.length} posts across all subreddits`);
         
         await inngest.send({
-          name: "ai/mega-batch-analyze.opportunities",
+          name: "ai/batch-analyze.opportunities",
           data: {
-            totalPosts: storedPosts.length,
-            subreddits: TARGET_SUBREDDITS,
+            subreddit: "mixed",
             posts: storedPosts.map(post => ({
               postId: post.id,
               postTitle: post.title,
@@ -644,11 +738,21 @@ export const scrapeAllSubreddits = inngest.createFunction(
               author: post.author,
               score: post.score,
               numComments: post.numComments,
-            }))
+            })),
+            triggeredBy: "immediate-mega-scrape-processing",
+            batchInfo: {
+              batchNumber: 1,
+              totalBatches: 1,
+              postsInBatch: storedPosts.length,
+              totalPosts: storedPosts.length,
+              isMixedSubreddits: true,
+              isImmediateProcessing: true,
+              timestamp: new Date().toISOString(),
+            }
           }
         });
         
-        console.log(`[MEGA_SCRAPE] Mega-batch AI analysis event sent for ${storedPosts.length} posts`);
+        console.log(`[MEGA_SCRAPE] AI analysis event sent for ${storedPosts.length} posts`);
       });
     } else {
       console.log(`[MEGA_SCRAPE] No new posts to analyze`);
@@ -729,7 +833,7 @@ export const scrapeAllSubreddits = inngest.createFunction(
       totalPostsFetched: allPosts.length,
       newPostsStored: storedPosts.length,
       cursorUpdateResults,
-      batchAnalysisTriggered: storedPosts.length > 0,
+      aiProcessingTriggered: storedPosts.length > 0,
     };
     
     console.log(`[MEGA_SCRAPE] Mega-scrape completed:`, result);
@@ -1233,179 +1337,3 @@ export const processUnprocessedPosts = inngest.createFunction(
   }
 );
 
-export const megaBatchAnalyzeOpportunities = inngest.createFunction(
-  { 
-    id: "mega-batch-analyze-opportunities",
-    retries: 3,
-    rateLimit: {
-      limit: 10,
-      period: "1m"
-    }
-  },
-  { event: "ai/mega-batch-analyze.opportunities" },
-  async ({ event, step }) => {
-    const { totalPosts, subreddits, posts } = event.data;
-    console.log(`[MEGA_BATCH_AI] Starting mega-batch analysis for ${totalPosts} posts across ${subreddits.length} subreddits`);
-
-    const batchRequests: BatchAnalysisRequest[] = posts.map((post: {
-      postId: string;
-      postTitle: string;
-      postContent: string;
-      subreddit: string;
-      author: string;
-      score: number;
-      numComments: number;
-    }, index: number) => ({
-      id: `mega_${index}`,
-      postId: post.postId,
-      postTitle: post.postTitle,
-      postContent: post.postContent,
-      subreddit: post.subreddit,
-      author: post.author,
-      score: post.score,
-      numComments: post.numComments,
-    }));
-
-    const batchResponse = await step.run("mega-batch-ai-analysis", async () => {
-      console.log(`[MEGA_BATCH_AI] Processing ${batchRequests.length} posts in mega-batches of 10`);
-      return await batchAnalyzeOpportunities(batchRequests, 10); // Process 10 posts per batch for better efficiency
-    });
-
-    const processedResults = await step.run("process-mega-batch-results", async () => {
-      console.log(`[MEGA_BATCH_AI] Processing ${batchResponse.results.length} mega-batch results`);
-      const processed = processBatchResults(batchResponse.results);
-      
-      let successCount = 0;
-      let errorCount = 0;
-      const subredditStats: Record<string, {successful: number, failed: number}> = {};
-      
-      for (const result of processed) {
-        // Initialize subreddit stats
-        const subreddit = batchRequests.find(r => r.postId === result.postId)?.subreddit || 'unknown';
-        if (!subredditStats[subreddit]) {
-          subredditStats[subreddit] = { successful: 0, failed: 0 };
-        }
-        
-        if (result.success && result.analysis && result.analysis.isOpportunity && result.analysis.opportunity) {
-          successCount++;
-          subredditStats[subreddit].successful++;
-          
-          // Store the analysis result (same as individual analysis)
-          try {
-            const post = await prisma.redditPost.findUnique({
-              where: { id: result.postId }
-            });
-            
-            if (!post) {
-              console.error(`[MEGA_BATCH_AI] Post ${result.postId} not found in database`);
-              continue;
-            }
-
-            // Check for duplicate opportunity
-            const existingOpp = await checkOpportunityDuplication(
-              result.analysis.opportunity.title, 
-              result.analysis.opportunity.description, 
-              result.analysis.opportunity.proposedSolution,
-              result.analysis.opportunity.categories.niche
-            );
-            if (existingOpp.isDuplicate) {
-              console.log(`[MEGA_BATCH_AI] Duplicate opportunity detected: ${result.analysis.opportunity.title}`);
-              continue;
-            }
-
-            // Store the opportunity
-            const opportunity = await prisma.opportunity.create({
-              data: {
-                title: result.analysis.opportunity.title,
-                description: result.analysis.opportunity.description,
-                proposedSolution: result.analysis.opportunity.proposedSolution,
-                marketContext: result.analysis.opportunity.marketContext,
-                implementationNotes: result.analysis.opportunity.implementationNotes,
-                marketSize: result.analysis.opportunity.marketSize,
-                complexity: result.analysis.opportunity.complexity,
-                successProbability: result.analysis.opportunity.successProbability,
-                subreddit: post.subreddit,
-                
-                // Delta 4 scores
-                speedScore: result.analysis.opportunity.delta4Scores.speed,
-                convenienceScore: result.analysis.opportunity.delta4Scores.convenience,
-                trustScore: result.analysis.opportunity.delta4Scores.trust,
-                priceScore: result.analysis.opportunity.delta4Scores.price,
-                statusScore: result.analysis.opportunity.delta4Scores.status,
-                predictabilityScore: result.analysis.opportunity.delta4Scores.predictability,
-                uiUxScore: result.analysis.opportunity.delta4Scores.uiUx,
-                easeOfUseScore: result.analysis.opportunity.delta4Scores.easeOfUse,
-                legalFrictionScore: result.analysis.opportunity.delta4Scores.legalFriction,
-                emotionalComfortScore: result.analysis.opportunity.delta4Scores.emotionalComfort,
-                
-                // Categories
-                businessType: result.analysis.opportunity.categories.businessType,
-                businessModel: result.analysis.opportunity.categories.businessModel,
-                revenueModel: result.analysis.opportunity.categories.revenueModel,
-                pricingModel: result.analysis.opportunity.categories.pricingModel,
-                platform: result.analysis.opportunity.categories.platform,
-                mobileSupport: result.analysis.opportunity.categories.mobileSupport,
-                deploymentType: result.analysis.opportunity.categories.deploymentType,
-                developmentType: result.analysis.opportunity.categories.developmentType,
-                targetAudience: result.analysis.opportunity.categories.targetAudience,
-                userType: result.analysis.opportunity.categories.userType,
-                technicalLevel: result.analysis.opportunity.categories.technicalLevel,
-                ageGroup: result.analysis.opportunity.categories.ageGroup,
-                geography: result.analysis.opportunity.categories.geography,
-                marketType: result.analysis.opportunity.categories.marketType,
-                economicLevel: result.analysis.opportunity.categories.economicLevel,
-                industryVertical: result.analysis.opportunity.categories.industryVertical,
-                niche: result.analysis.opportunity.categories.niche,
-                developmentComplexity: result.analysis.opportunity.categories.developmentComplexity,
-                teamSize: result.analysis.opportunity.categories.teamSize,
-                capitalRequirement: result.analysis.opportunity.categories.capitalRequirement,
-                developmentTime: result.analysis.opportunity.categories.developmentTime,
-                marketSizeCategory: result.analysis.opportunity.categories.marketSizeCategory,
-                competitionLevel: result.analysis.opportunity.categories.competitionLevel,
-                marketTrend: result.analysis.opportunity.categories.marketTrend,
-                growthPotential: result.analysis.opportunity.categories.growthPotential,
-                acquisitionStrategy: result.analysis.opportunity.categories.acquisitionStrategy,
-                scalabilityType: result.analysis.opportunity.categories.scalabilityType,
-              }
-            });
-
-            // Create the opportunity source relationship
-            await prisma.opportunitySource.create({
-              data: {
-                opportunityId: opportunity.id,
-                redditPostId: post.id,
-                sourceType: "post",
-                confidence: 0.9,
-              }
-            });
-
-            console.log(`[MEGA_BATCH_AI] Successfully stored opportunity from r/${post.subreddit}: ${result.analysis.opportunity.title}`);
-          } catch (storeError) {
-            console.error(`[MEGA_BATCH_AI] Failed to store opportunity for post ${result.postId}:`, storeError);
-            errorCount++;
-            subredditStats[subreddit].failed++;
-          }
-        } else {
-          errorCount++;
-          subredditStats[subreddit].failed++;
-          console.error(`[MEGA_BATCH_AI] Analysis failed for post ${result.postId}: ${result.error}`);
-        }
-      }
-      
-      console.log(`[MEGA_BATCH_AI] Subreddit breakdown:`, subredditStats);
-      return { successCount, errorCount, subredditStats };
-    });
-
-    const result = {
-      totalPosts,
-      subredditsProcessed: subreddits.length,
-      postsAnalyzed: posts.length,
-      successCount: processedResults.successCount,
-      errorCount: processedResults.errorCount,
-      subredditStats: processedResults.subredditStats,
-    };
-    
-    console.log(`[MEGA_BATCH_AI] Mega-batch analysis completed:`, result);
-    return result;
-  }
-);
