@@ -1,5 +1,5 @@
 import { inngest } from "../lib/inngest";
-import { RedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
+import { createRedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
 import { 
@@ -32,7 +32,7 @@ export const scrapeSubreddit = inngest.createFunction(
 
     const posts = await step.run("fetch-reddit-posts", async () => {
       console.log(`[SCRAPE] Fetching ${sort} posts from r/${subreddit}`);
-      const client = new RedditClient();
+      const client = createRedditClient();
       
       try {
         const allPosts = await client.fetchSubredditPosts(subreddit, sort, limit);

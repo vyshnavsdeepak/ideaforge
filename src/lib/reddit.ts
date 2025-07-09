@@ -72,13 +72,13 @@ export interface RedditAPIError extends Error {
 }
 
 export class RedditClient {
-  private readonly baseUrl = 'https://www.reddit.com';
-  private readonly headers = {
+  protected readonly baseUrl = 'https://www.reddit.com';
+  protected readonly headers = {
     'User-Agent': 'OpportunityFinder/1.0.0 (by /u/OpportunityBot)',
     'Accept': 'application/json',
   };
-  private readonly maxRetries = 3;
-  private readonly baseDelay = 1000; // 1 second
+  protected readonly maxRetries = 3;
+  protected readonly baseDelay = 1000; // 1 second
 
   async fetchSubredditPosts(
     subreddit: string,
@@ -119,7 +119,7 @@ export class RedditClient {
     });
   }
 
-  private async retryWithBackoff<T>(
+  protected async retryWithBackoff<T>(
     operation: () => Promise<T>,
     attempt: number = 1
   ): Promise<T> {
@@ -148,7 +148,7 @@ export class RedditClient {
     }
   }
 
-  private async handleResponseErrors(response: Response, subreddit: string): Promise<void> {
+  protected async handleResponseErrors(response: Response, subreddit: string): Promise<void> {
     if (response.ok) return;
 
     const error: RedditAPIError = new Error(
@@ -191,18 +191,18 @@ export class RedditClient {
     throw error;
   }
 
-  private sleep(ms: number): Promise<void> {
+  protected sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private processRedditResponse(response: RedditResponse): ProcessedRedditPost[] {
+  protected processRedditResponse(response: RedditResponse): ProcessedRedditPost[] {
     return response.data.children
       .map((child) => child.data)
       .filter(this.filterPosts)
       .map(this.transformPost);
   }
 
-  private filterPosts = (post: RedditPost): boolean => {
+  protected filterPosts = (post: RedditPost): boolean => {
     if (post.stickied || post.locked || post.over_18) {
       return false;
     }
@@ -233,7 +233,7 @@ export class RedditClient {
     return true;
   };
 
-  private transformPost = (post: RedditPost): ProcessedRedditPost => {
+  protected transformPost = (post: RedditPost): ProcessedRedditPost => {
     return {
       redditId: post.id,
       title: post.title,
@@ -249,4 +249,69 @@ export class RedditClient {
       createdUtc: new Date(post.created_utc * 1000),
     };
   };
+}
+
+// Import auth client
+import { RedditAuthClient, createRedditAuthClient } from './reddit-auth';
+
+/**
+ * Authenticated Reddit Client that uses OAuth
+ */
+export class AuthenticatedRedditClient extends RedditClient {
+  private authClient: RedditAuthClient;
+
+  constructor(authClient: RedditAuthClient) {
+    super();
+    this.authClient = authClient;
+  }
+
+  async fetchSubredditPosts(
+    subreddit: string,
+    sort: 'hot' | 'new' | 'top' | 'rising' = 'hot',
+    limit: number = 25
+  ): Promise<ProcessedRedditPost[]> {
+    console.log(`[REDDIT_AUTH] Fetching r/${subreddit} with authentication`);
+    
+    const endpoint = `/r/${subreddit}/${sort}?limit=${limit}&raw_json=1`;
+    
+    return this.retryWithBackoff(async () => {
+      try {
+        const response = await this.authClient.makeAuthenticatedRequest(endpoint);
+        
+        if (!response.ok) {
+          // Use parent class error handling
+          await this.handleResponseErrors(response, subreddit);
+        }
+        
+        const data: RedditResponse = await response.json();
+        return this.processRedditResponse(data);
+      } catch (error) {
+        // Handle network errors
+        if (error instanceof Error && !('status' in error)) {
+          const networkError = new Error(`Network error accessing r/${subreddit}: ${error.message}`) as RedditAPIError;
+          networkError.isBlocked = false;
+          networkError.isRateLimited = false;
+          throw networkError;
+        }
+        
+        throw error;
+      }
+    });
+  }
+}
+
+/**
+ * Factory function to create the appropriate Reddit client
+ */
+export function createRedditClient(): RedditClient {
+  // Try to create authenticated client first
+  const authClient = createRedditAuthClient();
+  
+  if (authClient) {
+    console.log('[REDDIT] Using authenticated Reddit client');
+    return new AuthenticatedRedditClient(authClient);
+  } else {
+    console.log('[REDDIT] Using unauthenticated Reddit client (rate limits apply)');
+    return new RedditClient();
+  }
 }
