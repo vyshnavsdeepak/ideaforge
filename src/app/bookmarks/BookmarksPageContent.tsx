@@ -175,11 +175,11 @@ export function BookmarksPageContent() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Sidebar - Collections */}
           <div className="lg:col-span-1">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <CollectionManager
                   onCollectionSelect={handleCollectionSelect}
                   selectedCollectionId={selectedCollection?.id}
@@ -189,7 +189,7 @@ export function BookmarksPageContent() {
           </div>
 
           {/* Main Content */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-2">
             {selectedCollection ? (
               <div className="space-y-6">
                 {/* Collection Header */}
@@ -241,8 +241,8 @@ export function BookmarksPageContent() {
                 </div>
 
                 {/* Search and Filters */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                  <div className="flex flex-col md:flex-row gap-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                       <input
@@ -254,11 +254,11 @@ export function BookmarksPageContent() {
                       />
                     </div>
                     
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as 'created' | 'score' | 'rating' | 'title')}
-                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
                       >
                         <option value="created">Sort by Date</option>
                         <option value="score">Sort by Score</option>

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { prisma } from '../../../../../lib/prisma';
 import { z } from 'zod';
 import { authOptions } from '../../../auth/[...nextauth]/route';
+import { ensureAdminUser } from '../../../../../lib/ensure-admin-user';
 
 const updateCollectionSchema = z.object({
   name: z.string().min(1).max(50).optional(),
@@ -24,13 +25,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const collection = await prisma.bookmarkCollection.findFirst({
       where: { 
@@ -88,13 +84,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const body = await request.json();
     const validatedData = updateCollectionSchema.parse(body);
@@ -175,13 +166,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     // Check if collection exists and belongs to user
     const existingCollection = await prisma.bookmarkCollection.findFirst({

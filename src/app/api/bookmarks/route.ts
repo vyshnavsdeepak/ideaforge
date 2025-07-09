@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { prisma } from '../../../lib/prisma';
 import { z } from 'zod';
 import { authOptions } from '../auth/[...nextauth]/route';
+import { ensureAdminUser } from '../../../lib/ensure-admin-user';
 
 const createBookmarkSchema = z.object({
   opportunityId: z.string(),
@@ -21,13 +22,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const { searchParams } = new URL(request.url);
     const collectionId = searchParams.get('collectionId');
@@ -87,13 +83,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const body = await request.json();
     const validatedData = createBookmarkSchema.parse(body);
