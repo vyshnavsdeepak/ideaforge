@@ -92,13 +92,14 @@ interface OpportunitiesData {
 }
 
 interface OpportunitiesPageContentProps {
-  initialData: OpportunitiesData;
+  initialData?: OpportunitiesData;
 }
 
 export function OpportunitiesPageContent({ initialData }: OpportunitiesPageContentProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [data, setData] = useState<OpportunitiesData | null>(initialData || null);
   const [showFilters, setShowFilters] = useState(false);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   
@@ -116,6 +117,43 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
   const currentViability = searchParams.get('viability') || 'all';
   const currentSortBy = searchParams.get('sortBy') || 'overallScore';
   const currentSortOrder = searchParams.get('sortOrder') || 'desc';
+
+  // Fetch data from API
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const queryParams = new URLSearchParams();
+      searchParams.forEach((value, key) => {
+        queryParams.set(key, value);
+      });
+      
+      const response = await fetch(`/api/opportunities?${queryParams.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch opportunities');
+      }
+      
+      const result = await response.json();
+      setData(result);
+    } catch (error) {
+      console.error('Error fetching opportunities:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchParams]);
+
+  // Initial data fetch
+  useEffect(() => {
+    if (!initialData) {
+      fetchData();
+    }
+  }, [initialData, fetchData]);
+
+  // Fetch data when search params change
+  useEffect(() => {
+    if (initialData) {
+      fetchData();
+    }
+  }, [searchParams, initialData, fetchData]);
 
   // Navigation function that updates URL with query parameters
   const navigateWithParams = useCallback((newParams: Record<string, string | number | undefined>) => {
@@ -145,9 +183,8 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
 
   // Reset loading state when navigation completes and update search input
   useEffect(() => {
-    setIsLoading(false);
     setSearchInput(searchParams.get('search') || '');
-  }, [initialData, searchParams]);
+  }, [searchParams]);
 
   // Debounced search effect
   useEffect(() => {
@@ -194,6 +231,17 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
     setSearchInput(e.target.value);
   };
 
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-300">Loading opportunities...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-slate-900">
       {/* Animated background elements */}
@@ -223,20 +271,20 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   {activeFiltersCount > 0 ? 'Filtered' : 'Total Found'}
                 </div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  {initialData.pagination.totalCount}
+                  {data.pagination.totalCount}
                   <TrendingUp className="w-5 h-5 text-green-500" />
                 </div>
               </div>
               <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-4 py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
                 <div className="text-sm text-gray-600 dark:text-gray-400">Viable (4+ Score)</div>
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  {initialData.stats.viable}
+                  {data.stats.viable}
                 </div>
               </div>
               <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-4 py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
                 <div className="text-sm text-gray-600 dark:text-gray-400">Avg Score</div>
                 <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {initialData.stats.avgScore.toFixed(1)}
+                  {data.stats.avgScore.toFixed(1)}
                 </div>
               </div>
             </div>
@@ -294,7 +342,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Subreddits</option>
-                  {initialData.filters.subreddits.map((sub) => (
+                  {data.filters.subreddits.map((sub) => (
                     <option key={sub} value={sub}>
                       r/{sub}
                     </option>
@@ -313,7 +361,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Types</option>
-                  {initialData.filters.businessTypes.map((type) => (
+                  {data.filters.businessTypes.map((type) => (
                     <option key={type} value={type}>
                       {type}
                     </option>
@@ -332,7 +380,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Platforms</option>
-                  {initialData.filters.platforms.map((platform) => (
+                  {data.filters.platforms.map((platform) => (
                     <option key={platform} value={platform}>
                       {platform}
                     </option>
@@ -351,7 +399,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Audiences</option>
-                  {initialData.filters.targetAudiences.map((audience) => (
+                  {data.filters.targetAudiences.map((audience) => (
                     <option key={audience} value={audience}>
                       {audience}
                     </option>
@@ -370,7 +418,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Industries</option>
-                  {initialData.filters.industryVerticals.map((industry) => (
+                  {data.filters.industryVerticals.map((industry) => (
                     <option key={industry} value={industry}>
                       {industry}
                     </option>
@@ -389,7 +437,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="">All Niches</option>
-                  {initialData.filters.niches.map((niche) => (
+                  {data.filters.niches.map((niche) => (
                     <option key={niche} value={niche}>
                       {niche}
                     </option>
@@ -508,7 +556,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
               <div className="backdrop-blur-xl bg-blue-50/60 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200/20 dark:border-blue-700/20">
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-blue-800 dark:text-blue-200">
-                    Showing {initialData.opportunities.length} of {initialData.pagination.totalCount} opportunities
+                    Showing {data.opportunities.length} of {data.pagination.totalCount} opportunities
                     {currentSearch && ` matching "${currentSearch}"`}
                     {currentSubreddit && ` from r/${currentSubreddit}`}
                     {currentMinScore > 0 && ` with score ≥ ${currentMinScore}`}
@@ -524,7 +572,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
             )}
 
             {/* Opportunities List */}
-            {initialData.opportunities.length === 0 ? (
+            {data.opportunities.length === 0 ? (
               <div className="backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-12 shadow-xl border border-white/20 dark:border-gray-700/20 text-center">
                 <Sparkles className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No opportunities found</h3>
@@ -545,7 +593,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
               </div>
             ) : (
               <>
-                {initialData.opportunities.map((opportunity, index) => (
+                {data.opportunities.map((opportunity, index) => (
                   <div
                     key={opportunity.id}
                     className="transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1 animate-fadeIn"
@@ -560,10 +608,10 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
             )}
 
             {/* Pagination */}
-            {initialData.pagination.totalPages > 1 && (
+            {data.pagination.totalPages > 1 && (
               <div className="flex items-center justify-between mt-8">
                 <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, initialData.pagination.totalCount)} of {initialData.pagination.totalCount} opportunities
+                  Showing {((currentPage - 1) * currentLimit) + 1} to {Math.min(currentPage * currentLimit, data.pagination.totalCount)} of {data.pagination.totalCount} opportunities
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -576,7 +624,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
                   </button>
                   
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, initialData.pagination.totalPages) }, (_, i) => {
+                    {Array.from({ length: Math.min(5, data.pagination.totalPages) }, (_, i) => {
                       const page = i + 1;
                       const isActive = page === currentPage;
                       return (
@@ -597,7 +645,7 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
 
                   <button
                     onClick={() => navigateWithParams({ page: currentPage + 1 })}
-                    disabled={currentPage === initialData.pagination.totalPages}
+                    disabled={currentPage === data.pagination.totalPages}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
