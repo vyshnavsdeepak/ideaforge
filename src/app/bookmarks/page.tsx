@@ -20,6 +20,6 @@ export default function BookmarksPage() {
 }
 
 export const metadata = {
-  title: 'Bookmarks - IdeaForge',
+  title: 'Bookmarks',
   description: 'Manage your bookmarked opportunities and collections',
 };

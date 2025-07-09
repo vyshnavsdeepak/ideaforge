@@ -1,8 +1,12 @@
-'use client';
-
+import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { OpportunitiesPageContent } from '../../components/OpportunitiesPageContent';
 import { Loader2 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Opportunities',
+  description: 'Discover AI-identified business opportunities from Reddit',
+};
 
 export default function OpportunitiesPage() {
   return (

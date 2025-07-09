@@ -1,8 +1,12 @@
-'use client';
-
+import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { PostsPageContent } from '../../components/PostsPageContent';
 import { Loader2 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Reddit Posts',
+  description: 'Browse and analyze Reddit posts for business opportunities',
+};
 
 export default function RedditPostsPage() {
   return (

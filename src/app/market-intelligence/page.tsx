@@ -1,8 +1,12 @@
-'use client';
-
+import { Metadata } from 'next';
 import { Suspense } from 'react';
 import { MarketIntelligenceContent } from '../../components/MarketIntelligenceContent';
 import { Loader2 } from 'lucide-react';
+
+export const metadata: Metadata = {
+  title: 'Market Intelligence',
+  description: 'Discover market trends and insights from Reddit discussions',
+};
 
 export default function MarketIntelligencePage() {
   return (

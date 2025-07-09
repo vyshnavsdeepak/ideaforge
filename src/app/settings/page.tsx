@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { SettingsContent } from './SettingsContent';
 
 export const metadata: Metadata = {
-  title: 'Settings - IdeaForge',
+  title: 'Settings',
   description: 'Configure your Reddit AI Opportunity Finder settings',
 };
 
