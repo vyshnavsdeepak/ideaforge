@@ -6,14 +6,15 @@ import { ExternalLink, MessageSquare, ArrowBigUp, ArrowBigDown, ArrowLeft, User,
 import { formatRedditUrl } from '../../../lib/reddit-utils';
 
 interface PostPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function PostPage({ params }: PostPageProps) {
+  const resolvedParams = await params;
   const post = await prisma.redditPost.findUnique({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     include: {
       opportunitySources: {
         include: {

@@ -7,14 +7,15 @@ import { ExternalLink, Clock, MessageSquare, ArrowBigUp, ArrowLeft } from 'lucid
 import { formatRedditUrl } from '../../../lib/reddit-utils';
 
 interface OpportunityPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function OpportunityPage({ params }: OpportunityPageProps) {
+  const resolvedParams = await params;
   const opportunity = await prisma.opportunity.findUnique({
-    where: { id: params.id },
+    where: { id: resolvedParams.id },
     include: {
       redditPosts: {
         include: {

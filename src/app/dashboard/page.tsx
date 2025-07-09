@@ -1,5 +1,6 @@
 import { getServerSession } from 'next-auth/next';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
 import { FixUrlsButton } from '../../components/FixUrlsButton';
 import { prisma } from '../../lib/prisma';
@@ -95,12 +96,12 @@ export default async function Dashboard() {
           </p>
           <div className="flex gap-4">
             <TriggerScrapingButton />
-            <a
+            <Link
               href="/opportunities"
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
               🎯 View Opportunities
-            </a>
+            </Link>
             <FixUrlsButton />
           </div>
         </div>

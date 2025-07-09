@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -48,24 +50,24 @@ export default function Home() {
             Access the admin dashboard to manage scraping and view discovered opportunities:
           </p>
           <div className="flex gap-4">
-            <a
+            <Link
               href="/dashboard"
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
               🔐 Admin Dashboard
-            </a>
-            <a
+            </Link>
+            <Link
               href="/opportunities"
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
               🎯 View Opportunities
-            </a>
-            <a
+            </Link>
+            <Link
               href="/market-demand"
               className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
             >
               📊 Market Demand
-            </a>
+            </Link>
           </div>
         </div>
 
