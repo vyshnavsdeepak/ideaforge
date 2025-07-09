@@ -15,7 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reddit AI Opportunity Finder",
+  title: {
+    default: "IdeaForge - Reddit AI Opportunity Finder",
+    template: "%s | IdeaForge"
+  },
   description: "Discover validated AI business opportunities from Reddit using Delta 4 theory",
 };
 

@@ -4,6 +4,12 @@ import Link from 'next/link';
 import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
 import { FixUrlsButton } from '../../components/FixUrlsButton';
 import { prisma } from '../../lib/prisma';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+  description: 'Monitor your Reddit AI opportunity discovery system',
+};
 
 export default async function Dashboard() {
   const session = await getServerSession();
