@@ -15,6 +15,7 @@
     "test:ci": "jest --ci --coverage --watchAll=false",
     "test:critical": "jest --testPathPattern=\"(reddit-utils|deduplication|reddit)\\.test\\.ts$\"",
     "test:reddit-auth": "npx tsx src/scripts/test-reddit-auth.ts",
+    "db:migrate:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },
   "dependencies": {

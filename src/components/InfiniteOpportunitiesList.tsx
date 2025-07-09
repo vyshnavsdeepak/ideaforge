@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { OpportunityCard } from './OpportunityCard';
 import { FilterPanel } from './FilterPanel';
 import { Loader2, ChevronUp, Search, Filter, TrendingUp, Sparkles, X } from 'lucide-react';
@@ -91,7 +91,6 @@ export function InfiniteOpportunitiesList() {
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
-  const router = useRouter();
   
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,8 +231,10 @@ export function InfiniteOpportunitiesList() {
     );
 
     const queryString = qs.stringify(cleanedFilters, { addQueryPrefix: true });
-    router.push(`/opportunities${queryString}`);
-  }, [currentFilters, router]);
+    
+    // Update URL without navigation to avoid page reload
+    window.history.replaceState({}, '', `/opportunities${queryString}`);
+  }, [currentFilters]);
 
   const viableOpportunities = opportunities.filter(opp => opp.viabilityThreshold);
 
