@@ -528,7 +528,12 @@ export const analyzeOpportunity = inngest.createFunction(
       await step.run("mark-post-processed", async () => {
         await prisma.redditPost.update({
           where: { id: postId },
-          data: { processedAt: new Date() }
+          data: { 
+            processedAt: new Date(),
+            isOpportunity: true,
+            aiConfidence: analysis.confidence || 0.9,
+            aiAnalysisDate: new Date()
+          }
         });
       });
 
@@ -1111,10 +1116,15 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
               }
             });
 
-            // Mark post as processed
+            // Mark post as processed and as opportunity
             await prisma.redditPost.update({
               where: { id: result.postId },
-              data: { processedAt: new Date() }
+              data: { 
+                processedAt: new Date(),
+                isOpportunity: true,
+                aiConfidence: result.analysis.confidence || 0.9,
+                aiAnalysisDate: new Date()
+              }
             });
 
             successCount++;
@@ -1128,10 +1138,27 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
             
             console.log(`[BATCH_AI] Successfully stored opportunity: ${result.analysis.opportunity.title} (Score: ${result.analysis.opportunity.overallScore})`);
           } else {
-            errorCount++;
-            const errorMsg = result.error || (result.analysis?.reasons?.[0] || "Unknown analysis error");
-            errors.push({ postId: result.postId, error: errorMsg });
-            console.error(`[BATCH_AI] Analysis failed for post ${result.postId}: ${errorMsg}`);
+            // Post was analyzed but is not an opportunity
+            if (result.success && result.analysis && !result.analysis.isOpportunity) {
+              // Mark post as rejected
+              await prisma.redditPost.update({
+                where: { id: result.postId },
+                data: { 
+                  processedAt: new Date(),
+                  isOpportunity: false,
+                  rejectionReasons: result.analysis.reasons || ["No opportunity identified"],
+                  aiConfidence: result.analysis.confidence || 0.0,
+                  aiAnalysisDate: new Date()
+                }
+              });
+              console.log(`[BATCH_AI] Post ${result.postId} marked as non-opportunity: ${result.analysis.reasons?.[0] || "No specific reason"}`);
+            } else {
+              // Analysis error
+              errorCount++;
+              const errorMsg = result.error || (result.analysis?.reasons?.[0] || "Unknown analysis error");
+              errors.push({ postId: result.postId, error: errorMsg });
+              console.error(`[BATCH_AI] Analysis failed for post ${result.postId}: ${errorMsg}`);
+            }
           }
         } catch (storeError) {
           console.error(`[BATCH_AI] Failed to store opportunity for post ${result.postId}:`, storeError);

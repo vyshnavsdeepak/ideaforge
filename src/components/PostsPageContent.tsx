@@ -38,6 +38,10 @@ interface RedditPost {
   createdUtc: Date;
   processedAt: Date | null;
   processingError: string | null;
+  isOpportunity: boolean | null;
+  rejectionReasons: string[];
+  aiConfidence: number | null;
+  aiAnalysisDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
   opportunitySources: Array<{
@@ -69,6 +73,8 @@ interface PostsData {
     processed: number;
     unprocessed: number;
     failed: number;
+    opportunities?: number;
+    rejected?: number;
   };
   subreddits: Array<{
     name: string;
@@ -181,13 +187,33 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
       };
     }
     if (post.processedAt) {
-      return {
-        status: 'processed',
-        label: 'Processed',
-        icon: <CheckCircle className="w-4 h-4" />,
-        color: 'text-green-600 dark:text-green-400',
-        bgColor: 'bg-green-50 dark:bg-green-900/20',
-      };
+      // Check if it's an opportunity or rejected
+      if (post.isOpportunity === true) {
+        return {
+          status: 'opportunity',
+          label: 'Opportunity',
+          icon: <CheckCircle className="w-4 h-4" />,
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'bg-green-50 dark:bg-green-900/20',
+        };
+      } else if (post.isOpportunity === false) {
+        return {
+          status: 'rejected',
+          label: 'Not an Opportunity',
+          icon: <XCircle className="w-4 h-4" />,
+          color: 'text-gray-600 dark:text-gray-400',
+          bgColor: 'bg-gray-50 dark:bg-gray-900/20',
+        };
+      } else {
+        // Legacy processed posts without isOpportunity flag
+        return {
+          status: 'processed',
+          label: 'Processed',
+          icon: <CheckCircle className="w-4 h-4" />,
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'bg-green-50 dark:bg-green-900/20',
+        };
+      }
     }
     
     // Check if post was recently scraped but not yet processed
@@ -322,6 +348,8 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 <option value="processed">Processed</option>
                 <option value="unprocessed">Unprocessed</option>
                 <option value="failed">Failed</option>
+                <option value="opportunity">Opportunities</option>
+                <option value="rejected">Rejected (Non-Opportunities)</option>
               </select>
             </div>
 
@@ -509,6 +537,27 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                             {post.processingError}
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Rejection Reasons for Non-Opportunities */}
+                  {post.isOpportunity === false && post.rejectionReasons.length > 0 && (
+                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                      <div className="text-sm">
+                        <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Why this is not an opportunity:
+                        </div>
+                        <ul className="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
+                          {post.rejectionReasons.map((reason, index) => (
+                            <li key={index} className="text-xs">{reason}</li>
+                          ))}
+                        </ul>
+                        {post.aiConfidence !== null && (
+                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                            AI Confidence: {(post.aiConfidence * 100).toFixed(0)}%
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

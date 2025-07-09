@@ -32,6 +32,12 @@ export async function GET(request: NextRequest) {
         case 'failed':
           where.processingError = { not: null };
           break;
+        case 'opportunity':
+          where.isOpportunity = true;
+          break;
+        case 'rejected':
+          where.isOpportunity = false;
+          break;
       }
     }
 
@@ -94,9 +100,11 @@ export async function GET(request: NextRequest) {
       prisma.redditPost.count({ where: { processedAt: { not: null } } }),
       prisma.redditPost.count({ where: { processedAt: null } }),
       prisma.redditPost.count({ where: { processingError: { not: null } } }),
+      prisma.redditPost.count({ where: { isOpportunity: true } }),
+      prisma.redditPost.count({ where: { isOpportunity: false } }),
     ]);
 
-    const [totalPosts, processedPosts, unprocessedPosts, failedPosts] = stats;
+    const [totalPosts, processedPosts, unprocessedPosts, failedPosts, opportunityPosts, rejectedPosts] = stats;
 
     // Get available subreddits for filtering
     const subreddits = await prisma.redditPost.groupBy({
@@ -128,6 +136,8 @@ export async function GET(request: NextRequest) {
           processed: processedPosts,
           unprocessed: unprocessedPosts,
           failed: failedPosts,
+          opportunities: opportunityPosts,
+          rejected: rejectedPosts,
         },
         subreddits: subreddits.map(s => ({
           name: s.subreddit,
