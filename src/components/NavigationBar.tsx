@@ -16,8 +16,10 @@ const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊', description: 'Overview & Controls' },
   { name: 'Reddit Posts', href: '/posts', icon: '📝', description: 'Raw Reddit Data' },
   { name: 'Opportunities', href: '/opportunities', icon: '🎯', description: 'AI-Generated Ideas' },
+  { name: 'User Activity', href: '/user-activity', icon: '👤', description: 'Deep Dive Analysis' },
   { name: 'Market Intelligence', href: '/market-intelligence', icon: '📈', description: 'Demand Trends' },
   { name: 'Jobs & Status', href: '/jobs', icon: '⚡', description: 'System Monitoring' },
+  { name: 'Settings', href: '/settings', icon: '⚙️', description: 'Configuration' },
 ];
 
 export function NavigationBar() {
