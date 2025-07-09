@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { inngest } from '../../../lib/inngest';
+import { inngest } from '../../../../lib/inngest';
 
 export async function POST() {
   try {
