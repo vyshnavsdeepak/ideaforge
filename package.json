@@ -24,6 +24,7 @@
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-select": "^2.2.5",
     "ai": "^4.3.17",
+    "batch-ai": "^0.1.7",
     "clsx": "^2.1.1",
     "inngest": "^3.40.1",
     "lucide-react": "^0.525.0",

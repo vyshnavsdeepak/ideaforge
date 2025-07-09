@@ -90,7 +90,7 @@ export interface AIAnalysisResponse {
 }
 
 // Define the structured output schema
-const opportunitySchema = z.object({
+export const opportunitySchema = z.object({
   isOpportunity: z.boolean(),
   confidence: z.number().min(0).max(1),
   opportunity: z.object({
@@ -172,7 +172,7 @@ export class Delta4Analyzer {
     
     try {
       const result = await generateObject({
-        model: google('gemini-1.5-flash'),
+        model: google('gemini-2.0-flash-exp'),
         schema: opportunitySchema,
         prompt: `
 You are an expert business analyst specializing in AI opportunities and Kunal Shah's Delta 4 theory.
