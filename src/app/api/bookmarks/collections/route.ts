@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { prisma } from '../../../../lib/prisma';
 import { z } from 'zod';
+import { authOptions } from '../../auth/[...nextauth]/route';
 
 const createCollectionSchema = z.object({
   name: z.string().min(1).max(50),
@@ -14,7 +15,7 @@ const createCollectionSchema = z.object({
 // Get all collections for the current user
 export async function GET() {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -65,7 +66,7 @@ export async function GET() {
 // Create a new collection
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

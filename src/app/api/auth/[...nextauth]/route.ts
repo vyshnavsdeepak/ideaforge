@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth/next';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { prisma } from '../../../lib/prisma';
 
 const authOptions = {
   providers: [
@@ -32,6 +33,24 @@ const authOptions = {
   ],
   callbacks: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async signIn({ user }: { user: any }) {
+      if (user && user.email) {
+        // Create or update admin user in database
+        await prisma.user.upsert({
+          where: { email: user.email },
+          update: {
+            name: user.name,
+            updatedAt: new Date(),
+          },
+          create: {
+            email: user.email,
+            name: user.name,
+          },
+        });
+      }
+      return true;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.role = user.role;
@@ -58,4 +77,4 @@ const authOptions = {
 
 const handler = NextAuth(authOptions);
 
-export { handler as GET, handler as POST };
+export { handler as GET, handler as POST, authOptions };
