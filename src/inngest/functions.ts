@@ -178,28 +178,9 @@ export const scrapeSubreddit = inngest.createFunction(
       return newPosts;
     });
 
+    // Posts will be processed by the scheduled batch processor
     if (storedPosts.length > 0) {
-      await step.run("trigger-batch-ai-analysis", async () => {
-        console.log(`[SCRAPE] Triggering batch AI analysis for ${storedPosts.length} posts`);
-        
-        await inngest.send({
-          name: "ai/batch-analyze.opportunities",
-          data: {
-            subreddit,
-            posts: storedPosts.map(post => ({
-              postId: post.id,
-              postTitle: post.title,
-              postContent: post.content,
-              subreddit: post.subreddit,
-              author: post.author,
-              score: post.score,
-              numComments: post.numComments,
-            }))
-          }
-        });
-        
-        console.log(`[SCRAPE] Batch AI analysis event sent for ${storedPosts.length} posts`);
-      });
+      console.log(`[SCRAPE] Stored ${storedPosts.length} new posts for batch processing`);
     } else {
       console.log(`[SCRAPE] No new posts to analyze`);
     }

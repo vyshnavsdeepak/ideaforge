@@ -14,7 +14,8 @@ import {
   dailyComprehensiveScraper,
   realTimeHotScraper,
   weekendOpportunityDiscovery,
-  devModeScraper
+  devModeScraper,
+  batchAIProcessor
 } from "../../../inngest/scheduled-jobs";
 
 // Serve Inngest functions with proper configuration for Vercel
@@ -36,6 +37,7 @@ export const { GET, POST, PUT } = serve({
     realTimeHotScraper,
     weekendOpportunityDiscovery,
     devModeScraper,
+    batchAIProcessor,
   ],
   // Only use signing key if provided
   ...(process.env.INNGEST_SIGNING_KEY && { signingKey: process.env.INNGEST_SIGNING_KEY }),

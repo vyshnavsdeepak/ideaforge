@@ -1,5 +1,6 @@
 import { inngest } from "../lib/inngest";
 import { TARGET_SUBREDDITS } from "../lib/reddit";
+import { prisma } from "../lib/prisma";
 
 /**
  * Scheduled Reddit scraping jobs based on optimal timing:
@@ -166,5 +167,110 @@ export const devModeScraper = inngest.createFunction(
     });
 
     return { scrapedSubreddits: devSubreddits.length };
+  }
+);
+
+// Batch AI processor (runs every 5 minutes to process unprocessed posts)
+export const batchAIProcessor = inngest.createFunction(
+  { id: "batch-ai-processor" },
+  { cron: "*/5 * * * *" }, // Every 5 minutes
+  async ({ step }) => {
+    console.log('[BATCH_AI_PROCESSOR] Starting batch AI processing for unprocessed posts');
+    
+    // Find all unprocessed posts
+    const unprocessedPosts = await step.run("find-unprocessed-posts", async () => {
+      const posts = await prisma.redditPost.findMany({
+        where: {
+          processedAt: null,
+          processingError: null,
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 100, // Process up to 100 posts at a time
+      });
+      
+      console.log(`[BATCH_AI_PROCESSOR] Found ${posts.length} unprocessed posts`);
+      return posts;
+    });
+    
+    if (unprocessedPosts.length === 0) {
+      console.log('[BATCH_AI_PROCESSOR] No unprocessed posts found');
+      return { processed: 0, message: 'No unprocessed posts found' };
+    }
+    
+    // Group posts by subreddit for better analysis context
+    const postsBySubreddit = unprocessedPosts.reduce((groups, post) => {
+      if (!groups[post.subreddit]) {
+        groups[post.subreddit] = [];
+      }
+      groups[post.subreddit].push(post);
+      return groups;
+    }, {} as Record<string, typeof unprocessedPosts>);
+    
+    // Process each subreddit's posts
+    const results = await step.run("process-subreddit-batches", async () => {
+      const batchResults = [];
+      
+      for (const [subreddit, posts] of Object.entries(postsBySubreddit)) {
+        console.log(`[BATCH_AI_PROCESSOR] Processing ${posts.length} posts from r/${subreddit}`);
+        
+        try {
+          // Send batch analysis event
+          const batchEvent = await inngest.send({
+            name: "ai/batch-analyze.opportunities",
+            data: {
+              subreddit,
+              posts: posts.map(post => ({
+                postId: post.id,
+                postTitle: post.title,
+                postContent: post.content || '',
+                subreddit: post.subreddit,
+                author: post.author,
+                score: post.score,
+                numComments: post.numComments,
+              })),
+              triggeredBy: "scheduled-batch-processor",
+              batchInfo: {
+                totalPosts: posts.length,
+                subreddit,
+                timestamp: new Date().toISOString(),
+              }
+            }
+          });
+          
+          batchResults.push({
+            subreddit,
+            postsQueued: posts.length,
+            eventId: batchEvent.ids[0],
+            success: true,
+          });
+          
+          console.log(`[BATCH_AI_PROCESSOR] Queued ${posts.length} posts from r/${subreddit} for analysis`);
+        } catch (error) {
+          console.error(`[BATCH_AI_PROCESSOR] Failed to queue posts from r/${subreddit}:`, error);
+          batchResults.push({
+            subreddit,
+            postsQueued: 0,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            success: false,
+          });
+        }
+      }
+      
+      return batchResults;
+    });
+    
+    const totalProcessed = results.reduce((sum, result) => sum + (result.postsQueued || 0), 0);
+    const successfulBatches = results.filter(r => r.success).length;
+    
+    console.log(`[BATCH_AI_PROCESSOR] Completed: ${totalProcessed} posts queued across ${successfulBatches} subreddits`);
+    
+    return {
+      processed: totalProcessed,
+      subredditsProcessed: successfulBatches,
+      totalSubreddits: Object.keys(postsBySubreddit).length,
+      results,
+    };
   }
 );
