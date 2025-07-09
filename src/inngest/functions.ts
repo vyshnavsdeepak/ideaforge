@@ -2466,3 +2466,107 @@ export const analyzeUserActivity = inngest.createFunction(
   }
 );
 
+// Opportunity clustering function
+export const clusterOpportunities = inngest.createFunction(
+  { 
+    id: "cluster-opportunities",
+    retries: 2,
+    rateLimit: {
+      limit: 10,
+      period: "1h"
+    }
+  },
+  { event: "opportunities/cluster" },
+  async ({ event, step }) => {
+    const { forceRecalculate = false } = event.data;
+    console.log(`[CLUSTERING] Starting opportunity clustering (force: ${forceRecalculate})`);
+
+    // Import clustering engine
+    const { opportunityClusteringEngine } = await import("../lib/opportunity-clustering");
+
+    // Step 1: Cluster similar opportunities
+    const clusters = await step.run("cluster-similar-opportunities", async () => {
+      console.log(`[CLUSTERING] Running semantic clustering analysis`);
+      const result = await opportunityClusteringEngine.clusterSimilarOpportunities(forceRecalculate);
+      console.log(`[CLUSTERING] Generated ${result.length} opportunity clusters`);
+      return result;
+    });
+
+    // Step 2: Generate frequently requested ideas analysis
+    const topRequested = await step.run("get-top-requested-ideas", async () => {
+      console.log(`[CLUSTERING] Analyzing top requested ideas`);
+      const result = await opportunityClusteringEngine.getTopRequestedIdeas(50);
+      console.log(`[CLUSTERING] Found ${result.clusters.length} top requested idea clusters`);
+      return result;
+    });
+
+    // Step 3: Update demand signal clusters
+    await step.run("update-demand-signals", async () => {
+      console.log(`[CLUSTERING] Processing demand signals for ${clusters.length} clusters`);
+      
+      for (const cluster of clusters) {
+        if (cluster.sourceCount >= 3) { // Only process clusters with significant demand
+          const signals = await clusteringEngine.extractDemandSignals(
+            cluster.title,
+            cluster.description,
+            cluster.opportunities[0]?.subreddit || 'general',
+            cluster.opportunities[0]?.id || '',
+            'clustering-system',
+            cluster.sourceCount
+          );
+
+          for (const signal of signals) {
+            await clusteringEngine.processNewSignal(signal);
+          }
+        }
+      }
+      
+      console.log(`[CLUSTERING] Updated demand signals for high-demand clusters`);
+    });
+
+    // Step 4: Calculate clustering metrics and insights
+    const metrics = await step.run("calculate-clustering-metrics", async () => {
+      const totalOpportunities = await prisma.opportunity.count();
+      const clusteredOpportunities = clusters.reduce((sum, cluster) => sum + cluster.opportunities.length, 0);
+      const clusteringRate = (clusteredOpportunities / totalOpportunities) * 100;
+      
+      const crossSubredditClusters = clusters.filter(cluster => cluster.subreddits.length > 1).length;
+      const highDemandClusters = clusters.filter(cluster => cluster.sourceCount >= 5).length;
+      const viableOpportunityClusters = clusters.filter(cluster => 
+        cluster.totalViability / cluster.opportunities.length > 0.5
+      ).length;
+      
+      const avgClusterSize = clusters.length > 0 ? clusteredOpportunities / clusters.length : 0;
+      const avgTrendingScore = clusters.length > 0 ? 
+        clusters.reduce((sum, cluster) => sum + cluster.trendingScore, 0) / clusters.length : 0;
+
+      return {
+        totalOpportunities,
+        clusteredOpportunities,
+        clusteringRate,
+        totalClusters: clusters.length,
+        crossSubredditClusters,
+        highDemandClusters,
+        viableOpportunityClusters,
+        avgClusterSize,
+        avgTrendingScore,
+      };
+    });
+
+    console.log(`[CLUSTERING] Completed clustering analysis:`, {
+      clusters: clusters.length,
+      topRequested: topRequested.clusters.length,
+      metrics: metrics
+    });
+
+    return {
+      success: true,
+      clusters: clusters.slice(0, 20), // Return top 20 clusters
+      topRequested: topRequested.clusters.slice(0, 10), // Return top 10 requested
+      metrics,
+      summary: topRequested.summary,
+      timestamp: new Date().toISOString(),
+    };
+  }
+);
+

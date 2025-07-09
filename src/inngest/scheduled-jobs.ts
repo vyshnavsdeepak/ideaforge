@@ -337,3 +337,83 @@ export const historicalRecoveryScraper = inngest.createFunction(
     };
   }
 );
+
+// Daily opportunity clustering (4 PM EST = 2:30 AM IST next day)
+export const dailyOpportunityClustering = inngest.createFunction(
+  { id: "daily-opportunity-clustering" },
+  { cron: "0 16 * * *" }, // Daily at 4 PM EST
+  async ({ step }) => {
+    console.log('[DAILY_CLUSTERING] Starting daily opportunity clustering...');
+    
+    // Check if we have enough opportunities to cluster
+    const opportunityCount = await step.run("check-opportunity-count", async () => {
+      const count = await prisma.opportunity.count();
+      console.log(`[DAILY_CLUSTERING] Found ${count} opportunities to analyze`);
+      return count;
+    });
+
+    if (opportunityCount < 10) {
+      console.log('[DAILY_CLUSTERING] Not enough opportunities for clustering (minimum 10)');
+      return { skipped: true, reason: 'Insufficient opportunities', count: opportunityCount };
+    }
+
+    // Trigger clustering analysis
+    await step.run("trigger-clustering", async () => {
+      await inngest.send({
+        name: "opportunities/cluster",
+        data: { 
+          forceRecalculate: true,
+          triggeredBy: 'daily-schedule'
+        }
+      });
+    });
+
+    console.log('[DAILY_CLUSTERING] Daily clustering job triggered');
+    
+    return { 
+      success: true,
+      opportunityCount,
+      message: 'Daily opportunity clustering initiated'
+    };
+  }
+);
+
+// Weekly comprehensive clustering (Sundays at 3 PM EST = 1:30 AM IST Monday)
+export const weeklyComprehensiveClustering = inngest.createFunction(
+  { id: "weekly-comprehensive-clustering" },
+  { cron: "0 15 * * 0" }, // Weekly on Sundays at 3 PM EST
+  async ({ step }) => {
+    console.log('[WEEKLY_CLUSTERING] Starting weekly comprehensive clustering...');
+    
+    // Get clustering metrics before analysis
+    const beforeMetrics = await step.run("get-before-metrics", async () => {
+      const totalOpportunities = await prisma.opportunity.count();
+      const clustersCount = await prisma.marketDemandCluster.count();
+      
+      return {
+        totalOpportunities,
+        clustersCount,
+        timestamp: new Date().toISOString()
+      };
+    });
+
+    // Trigger comprehensive clustering with force recalculation
+    await step.run("trigger-comprehensive-clustering", async () => {
+      await inngest.send({
+        name: "opportunities/cluster",
+        data: { 
+          forceRecalculate: true,
+          triggeredBy: 'weekly-comprehensive-schedule'
+        }
+      });
+    });
+
+    console.log('[WEEKLY_CLUSTERING] Weekly comprehensive clustering job triggered');
+    
+    return { 
+      success: true,
+      beforeMetrics,
+      message: 'Weekly comprehensive clustering initiated'
+    };
+  }
+);

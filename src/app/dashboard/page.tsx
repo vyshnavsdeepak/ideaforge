@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
 import { FixUrlsButton } from '../../components/FixUrlsButton';
 import { HistoricalRecoveryButton } from '../../components/HistoricalRecoveryButton';
+import { TriggerClusteringButton } from '../../components/TriggerClusteringButton';
 import { prisma } from '../../lib/prisma';
 import { Metadata } from 'next';
 
@@ -153,6 +154,13 @@ export default async function Dashboard() {
             >
               🎯 View Opportunities
             </Link>
+            <Link
+              href="/opportunities/clusters"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              🔬 View Clusters
+            </Link>
+            <TriggerClusteringButton />
             <FixUrlsButton />
             <HistoricalRecoveryButton />
           </div>
