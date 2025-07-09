@@ -47,9 +47,11 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  favorites UserFavorite[]
+  accounts           Account[]
+  sessions           Session[]
+  favorites          UserFavorite[]
+  bookmarkCollections BookmarkCollection[]
+  opportunityBookmarks OpportunityBookmark[]
 }
 
 model VerificationToken {
@@ -215,6 +217,7 @@ model Opportunity {
   
   // User interactions
   favoriteByUsers      UserFavorite[]
+  bookmarkedByUsers    OpportunityBookmark[]
   
   // Market demand clustering
   marketDemandClusters MarketDemandOpportunity[]
@@ -339,6 +342,62 @@ model UserFavorite {
   opportunity  Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   
   @@unique([userId, opportunityId])
+}
+
+// Bookmark Collections (like playlists)
+model BookmarkCollection {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String?  @db.Text
+  color         String?  @default("#3B82F6")  // Hex color for visual organization
+  icon          String?  @default("📁")       // Emoji or icon identifier
+  isPublic      Boolean  @default(false)      // Whether collection is public
+  
+  // Metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmarks     OpportunityBookmark[]
+  
+  @@index([userId])
+  @@index([name])
+  @@index([createdAt])
+  @@unique([userId, name])
+}
+
+// Individual bookmarks within collections
+model OpportunityBookmark {
+  id            String   @id @default(cuid())
+  userId        String
+  opportunityId String
+  collectionId  String
+  
+  // Bookmark metadata
+  notes         String?  @db.Text             // User notes about this opportunity
+  rating        Int?                          // User's personal rating (1-5)
+  tags          String[] @default([])         // User's custom tags
+  
+  // Bookmark organization
+  position      Int      @default(0)          // Position within collection for custom ordering
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  collection    BookmarkCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([opportunityId])
+  @@index([collectionId])
+  @@index([createdAt])
+  @@index([position])
+  @@unique([userId, opportunityId, collectionId])
 }
 
 model SubredditCursor {
