@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { NextResponse } from 'next/server';
 import { inngest } from '../../../../lib/inngest';
-import { TARGET_SUBREDDITS } from '../../../../lib/reddit';
+import { getActiveSubredditNames } from '../../../../lib/subreddit-config';
 
 export async function POST() {
   try {
@@ -12,7 +12,8 @@ export async function POST() {
     }
 
     // Pick a random subreddit for manual testing
-    const randomSubreddit = TARGET_SUBREDDITS[Math.floor(Math.random() * TARGET_SUBREDDITS.length)];
+    const activeSubreddits = await getActiveSubredditNames();
+    const randomSubreddit = activeSubreddits[Math.floor(Math.random() * activeSubreddits.length)];
     
     // Trigger scraping
     const result = await inngest.send({

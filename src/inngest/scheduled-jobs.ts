@@ -1,6 +1,6 @@
 import { inngest } from "../lib/inngest";
-import { TARGET_SUBREDDITS } from "../lib/reddit";
 import { prisma } from "../lib/prisma";
+import { getActiveSubreddits } from "../lib/subreddit-config";
 
 /**
  * Scheduled Reddit scraping jobs based on optimal timing:
@@ -19,15 +19,14 @@ export const peakActivityScraper = inngest.createFunction(
   { id: "peak-activity-scraper" },
   { cron: "0,30 9-13 * * *" }, // Every 30 minutes from 9 AM to 1 PM EST
   async ({ step }) => {
-    const prioritySubreddits = [
-      'entrepreneur',
-      'startups', 
-      'smallbusiness',
-      'business',
-      'SaaS'
-    ];
-
     console.log('[PEAK_SCRAPER] Starting peak activity scraping...');
+    
+    const prioritySubreddits = await step.run("get-priority-subreddits", async () => {
+      const activeSubreddits = await getActiveSubreddits();
+      return activeSubreddits.filter(sub => sub.priority === 'high').map(sub => sub.name);
+    });
+
+    console.log(`[PEAK_SCRAPER] Found ${prioritySubreddits.length} high priority subreddits`);
     
     await step.run("trigger-priority-scraping", async () => {
       for (const subreddit of prioritySubreddits) {
@@ -53,20 +52,27 @@ export const dailyComprehensiveScraper = inngest.createFunction(
   async ({ step }) => {
     console.log('[DAILY_SCRAPER] Starting daily comprehensive scraping...');
     
+    const activeSubreddits = await step.run("get-active-subreddits", async () => {
+      const subreddits = await getActiveSubreddits();
+      return subreddits.map(sub => ({ name: sub.name, maxPosts: sub.maxPosts }));
+    });
+
+    console.log(`[DAILY_SCRAPER] Found ${activeSubreddits.length} active subreddits`);
+    
     await step.run("trigger-comprehensive-scraping", async () => {
-      for (const subreddit of TARGET_SUBREDDITS) {
+      for (const subreddit of activeSubreddits) {
         await inngest.send({
           name: "reddit/scrape.subreddit",
           data: { 
-            subreddit,
-            limit: 100, // Comprehensive scraping
+            subreddit: subreddit.name,
+            limit: Math.max(subreddit.maxPosts, 100), // Use configured max or 100, whichever is higher
             priority: 'normal'
           }
         });
       }
     });
 
-    return { scrapedSubreddits: TARGET_SUBREDDITS.length };
+    return { scrapedSubreddits: activeSubreddits.length };
   }
 );
 
@@ -75,13 +81,16 @@ export const realTimeHotScraper = inngest.createFunction(
   { id: "real-time-hot-scraper" },
   { cron: "*/10 * * * *" }, // Every 10 minutes
   async ({ step }) => {
-    const hotContentSubreddits = [
-      'entrepreneur',
-      'startups',
-      'business'
-    ];
+    const hotContentSubreddits = await step.run("get-hot-content-subreddits", async () => {
+      const activeSubreddits = await getActiveSubreddits();
+      // Focus on business-related subreddits for real-time hot content
+      return activeSubreddits.filter(sub => 
+        sub.category === 'Business' || 
+        ['entrepreneur', 'startups', 'business'].includes(sub.name)
+      ).map(sub => sub.name);
+    });
 
-    console.log('[REALTIME_SCRAPER] Starting real-time hot content scraping...');
+    console.log(`[REALTIME_SCRAPER] Starting real-time hot content scraping for ${hotContentSubreddits.length} subreddits...`);
     
     await step.run("trigger-hot-content-scraping", async () => {
       for (const subreddit of hotContentSubreddits) {
@@ -106,16 +115,16 @@ export const weekendOpportunityDiscovery = inngest.createFunction(
   { id: "weekend-opportunity-discovery" },
   { cron: "0 10 * * 6" }, // Saturdays at 10 AM EST
   async ({ step }) => {
-    const weekendSubreddits = [
-      'entrepreneur',
-      'startups',
-      'smallbusiness',
-      'business',
-      'SideProject',
-      'EntrepreneurRideAlong'
-    ];
+    const weekendSubreddits = await step.run("get-weekend-subreddits", async () => {
+      const activeSubreddits = await getActiveSubreddits();
+      // Focus on business and project-related subreddits for weekend discovery
+      return activeSubreddits.filter(sub => 
+        sub.category === 'Business' || 
+        ['entrepreneur', 'startups', 'smallbusiness', 'business', 'SideProject', 'EntrepreneurRideAlong'].includes(sub.name)
+      ).map(sub => sub.name);
+    });
 
-    console.log('[WEEKEND_SCRAPER] Starting weekend opportunity discovery...');
+    console.log(`[WEEKEND_SCRAPER] Starting weekend opportunity discovery for ${weekendSubreddits.length} subreddits...`);
     
     await step.run("trigger-weekend-scraping", async () => {
       for (const subreddit of weekendSubreddits) {
@@ -149,9 +158,13 @@ export const devModeScraper = inngest.createFunction(
       return { skipped: true };
     }
 
-    const devSubreddits = ['entrepreneur', 'startups'];
+    const devSubreddits = await step.run("get-dev-subreddits", async () => {
+      const activeSubreddits = await getActiveSubreddits();
+      // Use high priority subreddits for development testing
+      return activeSubreddits.filter(sub => sub.priority === 'high').slice(0, 2).map(sub => sub.name);
+    });
     
-    console.log('[DEV_SCRAPER] Starting development mode scraping...');
+    console.log(`[DEV_SCRAPER] Starting development mode scraping for ${devSubreddits.length} subreddits...`);
     
     await step.run("trigger-dev-scraping", async () => {
       for (const subreddit of devSubreddits) {
@@ -269,6 +282,58 @@ export const batchAIProcessor = inngest.createFunction(
       batchesTriggered: results.length,
       successfulBatches,
       results,
+    };
+  }
+);
+
+// Historical recovery scraping (for data recovery - goes back 1 year)
+export const historicalRecoveryScraper = inngest.createFunction(
+  { id: "historical-recovery-scraper" },
+  { event: "reddit/scrape.historical-recovery" },
+  async ({ event, step }) => {
+    const { forceRecovery = false } = event.data;
+    console.log(`[HISTORICAL_RECOVERY] Force recovery mode: ${forceRecovery}`);
+    
+    console.log('[HISTORICAL_RECOVERY] Starting historical recovery scraping...');
+    
+    const activeSubreddits = await step.run("get-active-subreddits", async () => {
+      const subreddits = await getActiveSubreddits();
+      return subreddits.map(sub => ({ name: sub.name, maxPosts: sub.maxPosts }));
+    });
+
+    console.log(`[HISTORICAL_RECOVERY] Found ${activeSubreddits.length} active subreddits for historical recovery`);
+    
+    // For historical recovery, we need to go back 1 year and ignore cursors
+    await step.run("trigger-historical-scraping", async () => {
+      for (const subreddit of activeSubreddits) {
+        // Send multiple scraping jobs to get comprehensive historical data
+        // We'll scrape hot, new, and top posts for each subreddit
+        const scrapeTypes = ['hot', 'new', 'top'];
+        
+        for (const sortType of scrapeTypes) {
+          await inngest.send({
+            name: "reddit/scrape.subreddit",
+            data: { 
+              subreddit: subreddit.name,
+              limit: 500, // Large limit for historical recovery
+              sort: sortType,
+              priority: 'recovery',
+              historical: true, // Flag to ignore cursor and go back in time
+              timeframe: '1year' // Go back 1 year
+            }
+          });
+        }
+      }
+    });
+
+    const totalJobs = activeSubreddits.length * 3; // 3 sort types per subreddit
+    
+    console.log(`[HISTORICAL_RECOVERY] Triggered ${totalJobs} historical scraping jobs`);
+    
+    return { 
+      scrapedSubreddits: activeSubreddits.length,
+      totalJobs,
+      message: 'Historical recovery scraping initiated - this will take time to complete'
     };
   }
 );

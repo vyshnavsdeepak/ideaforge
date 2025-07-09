@@ -89,6 +89,7 @@ export const TARGET_SUBREDDITS = [
   'MachineLearning',
   'artificialintelligence',
   'PromptEngineering',
+  'Instagram',
 ];
 
 export interface RedditAPIError extends Error {

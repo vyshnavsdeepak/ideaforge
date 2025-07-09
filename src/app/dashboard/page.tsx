@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
 import { FixUrlsButton } from '../../components/FixUrlsButton';
+import { HistoricalRecoveryButton } from '../../components/HistoricalRecoveryButton';
 import { prisma } from '../../lib/prisma';
 import { Metadata } from 'next';
 
@@ -144,7 +145,7 @@ export default async function Dashboard() {
           <p className="text-gray-600 dark:text-gray-300 mb-4">
             Trigger immediate Reddit scraping and AI analysis. The system also runs automatically on schedule.
           </p>
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <TriggerScrapingButton />
             <Link
               href="/opportunities"
@@ -153,6 +154,7 @@ export default async function Dashboard() {
               🎯 View Opportunities
             </Link>
             <FixUrlsButton />
+            <HistoricalRecoveryButton />
           </div>
         </div>
 

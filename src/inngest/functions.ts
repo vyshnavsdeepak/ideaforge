@@ -1,8 +1,9 @@
 import { inngest } from "../lib/inngest";
 import { NonRetriableError } from "inngest";
-import { createRedditClient, TARGET_SUBREDDITS, RedditAPIError } from "../lib/reddit";
+import { createRedditClient, RedditAPIError } from "../lib/reddit";
 import { Delta4Analyzer } from "../lib/ai";
 import { prisma } from "../lib/prisma";
+import { getActiveSubreddits } from "../lib/subreddit-config";
 import { Prisma } from "@prisma/client";
 import { 
   checkRedditPostDuplication, 
@@ -642,19 +643,22 @@ export const dailyRedditScrape = inngest.createFunction(
   { cron: "0 9 * * *" },
   async ({ step }) => {
     const results = await step.run("trigger-mega-batch-scraping", async () => {
-      console.log(`[DAILY_SCRAPE] Triggering mega-batch scraping for all ${TARGET_SUBREDDITS.length} subreddits`);
+      const activeSubreddits = await getActiveSubreddits();
+      const subredditNames = activeSubreddits.map(sub => sub.name);
+      
+      console.log(`[DAILY_SCRAPE] Triggering mega-batch scraping for all ${subredditNames.length} active subreddits`);
       
       const event = await inngest.send({
         name: "reddit/scrape.all-subreddits",
         data: {
           timestamp: new Date().toISOString(),
-          subreddits: TARGET_SUBREDDITS,
+          subreddits: subredditNames,
         }
       });
       
       return { 
         megaBatchTriggered: true,
-        subredditsIncluded: TARGET_SUBREDDITS.length,
+        subredditsIncluded: subredditNames.length,
         eventId: event.ids[0]
       };
     });
@@ -675,17 +679,22 @@ export const scrapeAllSubreddits = inngest.createFunction(
   },
   { event: "reddit/scrape.all-subreddits" },
   async ({ step }) => {
-    console.log(`[MEGA_SCRAPE] Starting mega-scrape for all ${TARGET_SUBREDDITS.length} subreddits`);
+    const activeSubreddits = await step.run("get-active-subreddits", async () => {
+      const subreddits = await getActiveSubreddits();
+      return subreddits.map(sub => sub.name);
+    });
+    
+    console.log(`[MEGA_SCRAPE] Starting mega-scrape for all ${activeSubreddits.length} active subreddits`);
 
     // Fetch posts from all subreddits in parallel
     const allPosts = await step.run("fetch-all-subreddit-posts", async () => {
       const client = createRedditClient();
       const allFetchedPosts = [];
       
-      console.log(`[MEGA_SCRAPE] Fetching posts from ${TARGET_SUBREDDITS.length} subreddits in parallel`);
+      console.log(`[MEGA_SCRAPE] Fetching posts from ${activeSubreddits.length} subreddits in parallel`);
       
       // Fetch from all subreddits concurrently
-      const fetchPromises = TARGET_SUBREDDITS.map(async (subreddit) => {
+      const fetchPromises = activeSubreddits.map(async (subreddit) => {
         try {
           console.log(`[MEGA_SCRAPE] Fetching from r/${subreddit}`);
           const posts = await client.fetchSubredditPosts(subreddit, 'hot', 25);
@@ -710,7 +719,7 @@ export const scrapeAllSubreddits = inngest.createFunction(
       // Process results and collect all posts
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const subreddit = TARGET_SUBREDDITS[i];
+        const subreddit = activeSubreddits[i];
         
         if (result.status === 'fulfilled') {
           allFetchedPosts.push(...result.value);
@@ -893,7 +902,7 @@ export const scrapeAllSubreddits = inngest.createFunction(
     });
 
     const result = { 
-      subredditsProcessed: TARGET_SUBREDDITS.length,
+      subredditsProcessed: activeSubreddits.length,
       totalPostsFetched: allPosts.length,
       newPostsStored: storedPosts.length,
       cursorUpdateResults,

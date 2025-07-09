@@ -36,6 +36,7 @@ export const DEFAULT_SUBREDDITS = [
   { name: 'MachineLearning', category: 'Technology', priority: 'medium' },
   { name: 'artificialintelligence', category: 'Technology', priority: 'high' },
   { name: 'PromptEngineering', category: 'Technology', priority: 'medium' },
+  { name: 'Instagram', category: 'Technology', priority: 'medium' },
 ] as const;
 
 /**
