@@ -2,48 +2,37 @@
 export * from './functions';
 export * from './scheduled-jobs';
 
-// Import all functions to create a functions array for easy serving
-import {
-  scrapeSubreddit,
-  analyzeOpportunity,
-  dailyRedditScrape,
-  scrapeAllSubreddits,
-  batchAnalyzeOpportunitiesFunction,
-  processUnprocessedPosts,
-  scrapeUserActivity,
-  analyzeUserActivity,
-} from './functions';
+// Dynamically collect all exported functions
+import * as functionsModule from './functions';
+import * as scheduledJobsModule from './scheduled-jobs';
 
-import {
-  peakActivityScraper,
-  dailyComprehensiveScraper,
-  realTimeHotScraper,
-  weekendOpportunityDiscovery,
-  devModeScraper,
-  batchAIProcessor,
-} from './scheduled-jobs';
+// Helper function to extract Inngest functions from a module
+function extractInngestFunctions(module: Record<string, unknown>): unknown[] {
+  return Object.values(module).filter((value) => {
+    // Check if it's an Inngest function by looking for common properties
+    return (
+      value &&
+      typeof value === 'object' &&
+      'id' in value &&
+      'fn' in value &&
+      typeof (value as { fn?: unknown }).fn === 'function'
+    );
+  });
+}
+
+// Automatically collect all functions
+const coreFunctions = extractInngestFunctions(functionsModule);
+const scheduledFunctions = extractInngestFunctions(scheduledJobsModule);
 
 // Create a single array of all functions for easy serving
 export const allFunctions = [
-  // Core functions
-  scrapeSubreddit,
-  analyzeOpportunity,
-  dailyRedditScrape,
-  scrapeAllSubreddits,
-  batchAnalyzeOpportunitiesFunction,
-  processUnprocessedPosts,
-  scrapeUserActivity,
-  analyzeUserActivity,
-  
-  // Scheduled jobs
-  peakActivityScraper,
-  dailyComprehensiveScraper,
-  realTimeHotScraper,
-  weekendOpportunityDiscovery,
-  devModeScraper,
-  batchAIProcessor,
-];
+  ...coreFunctions,
+  ...scheduledFunctions,
+] as unknown[];
 
 // Export count for logging/debugging
 export const functionCount = allFunctions.length;
-console.log(`🚀 Inngest: Loaded ${functionCount} functions`);
+
+// Log function names for debugging
+const functionNames = allFunctions.map((fn) => (fn as { id?: string }).id).filter(Boolean);
+console.log(`🚀 Inngest: Automatically loaded ${functionCount} functions:`, functionNames);
