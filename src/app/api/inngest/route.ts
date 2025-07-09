@@ -1,42 +1,11 @@
 import { serve } from "inngest/next";
 import { inngest } from "../../../lib/inngest";
-import { 
-  scrapeSubreddit, 
-  analyzeOpportunity, 
-  dailyRedditScrape,
-  scrapeAllSubreddits,
-  batchAnalyzeOpportunitiesFunction,
-  processUnprocessedPosts
-} from "../../../inngest/functions";
-import {
-  peakActivityScraper,
-  dailyComprehensiveScraper,
-  realTimeHotScraper,
-  weekendOpportunityDiscovery,
-  devModeScraper,
-  batchAIProcessor
-} from "../../../inngest/scheduled-jobs";
+import { allFunctions } from "../../../inngest";
 
 // Serve Inngest functions with proper configuration for Vercel
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [
-    // Core functions
-    scrapeSubreddit,
-    analyzeOpportunity,
-    dailyRedditScrape,
-    scrapeAllSubreddits,
-    batchAnalyzeOpportunitiesFunction,
-    processUnprocessedPosts,
-    
-    // Scheduled jobs
-    peakActivityScraper,
-    dailyComprehensiveScraper,
-    realTimeHotScraper,
-    weekendOpportunityDiscovery,
-    devModeScraper,
-    batchAIProcessor,
-  ],
+  functions: allFunctions,
   // Only use signing key if provided
   ...(process.env.INNGEST_SIGNING_KEY && { signingKey: process.env.INNGEST_SIGNING_KEY }),
   // Set the base URL for Vercel deployments

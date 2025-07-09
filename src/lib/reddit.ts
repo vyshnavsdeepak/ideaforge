@@ -69,6 +69,8 @@ export interface RedditCommentResponse {
   };
 }
 
+// Legacy export for backwards compatibility
+// Use getActiveSubredditNames() from subreddit-config.ts instead
 export const TARGET_SUBREDDITS = [
   'entrepreneur',
   'startups', 

@@ -861,3 +861,36 @@ model UserScrapingJob {
   @@index([scrapeType])
   @@index([startedAt])
 }
+
+// Subreddit Configuration
+model SubredditConfig {
+  id                   String   @id @default(cuid())
+  name                 String   @unique              // Subreddit name (without r/ prefix)
+  
+  // Configuration
+  isActive             Boolean  @default(true)       // Whether to scrape this subreddit
+  priority             String   @default("medium")   // "high", "medium", "low"
+  scrapeFrequency      String   @default("hourly")   // "hourly", "daily", "weekly"
+  
+  // Scraping settings
+  maxPosts             Int      @default(25)         // Max posts to scrape per run
+  sortBy               String   @default("hot")      // "hot", "new", "top"
+  
+  // Metadata
+  description          String?                       // Optional description
+  category             String?                       // Business, Tech, etc.
+  
+  // Statistics
+  totalPostsScraped    Int      @default(0)
+  opportunitiesFound   Int      @default(0)
+  lastScraped          DateTime?
+  
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@index([isActive])
+  @@index([priority])
+  @@index([scrapeFrequency])
+  @@index([lastScraped])
+}
