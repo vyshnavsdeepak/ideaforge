@@ -57,7 +57,33 @@ export async function GET(request: NextRequest) {
     const [posts, totalCount] = await Promise.all([
       prisma.redditPost.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          redditId: true,
+          title: true,
+          content: true,
+          author: true,
+          subreddit: true,
+          score: true,
+          upvotes: true,
+          downvotes: true,
+          numComments: true,
+          permalink: true,
+          createdUtc: true,
+          processedAt: true,
+          processingError: true,
+          isOpportunity: true,
+          rejectionReasons: true,
+          aiConfidence: true,
+          aiAnalysisDate: true,
+          commentAnalysisStatus: true,
+          commentAnalysisJobId: true,
+          commentAnalysisStarted: true,
+          commentAnalysisCompleted: true,
+          commentAnalysisError: true,
+          commentOpportunitiesFound: true,
+          createdAt: true,
+          updatedAt: true,
           opportunitySources: {
             select: {
               id: true,

@@ -84,6 +84,14 @@ model RedditPost {
   aiConfidence    Float?   // AI confidence score (0-1)
   aiAnalysisDate  DateTime? // When AI analysis was completed
   
+  // Comment Analysis Status
+  commentAnalysisStatus String? // "pending", "processing", "completed", "failed"
+  commentAnalysisJobId  String? // Inngest job ID for tracking
+  commentAnalysisStarted DateTime? // When comment analysis was started
+  commentAnalysisCompleted DateTime? // When comment analysis was completed
+  commentAnalysisError  String? @db.Text // Error message if analysis failed
+  commentOpportunitiesFound Int? @default(0) // Number of opportunities found in comments
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

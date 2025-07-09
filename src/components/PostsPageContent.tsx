@@ -42,6 +42,12 @@ interface RedditPost {
   rejectionReasons: string[];
   aiConfidence: number | null;
   aiAnalysisDate: Date | null;
+  commentAnalysisStatus: string | null;
+  commentAnalysisJobId: string | null;
+  commentAnalysisStarted: Date | null;
+  commentAnalysisCompleted: Date | null;
+  commentAnalysisError: string | null;
+  commentOpportunitiesFound: number | null;
   createdAt: Date;
   updatedAt: Date;
   opportunitySources: Array<{
@@ -185,15 +191,14 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to analyze comments');
-      }
-
       const result = await response.json();
+      
       if (result.success) {
-        alert(`Comments analysis triggered! Job ID: ${result.jobId}`);
+        alert(`Comments analysis started! Job ID: ${result.jobId}`);
+        // Refresh the posts data to show updated status
+        await fetchData();
       } else {
-        throw new Error(result.error || 'Unknown error');
+        alert(result.error || 'Failed to analyze comments');
       }
     } catch (error) {
       console.error('Error analyzing comments:', error);
@@ -283,6 +288,46 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
       avgScore: opportunities.length > 0 
         ? opportunities.reduce((sum, opp) => sum + opp.overallScore, 0) / opportunities.length 
         : 0,
+    };
+  };
+
+  const getCommentAnalysisStatus = (post: RedditPost) => {
+    const status = post.commentAnalysisStatus;
+    
+    if (status === 'processing') {
+      return {
+        disabled: true,
+        buttonText: 'Analyzing...',
+        icon: <Loader2 className="w-4 h-4 animate-spin" />,
+        className: 'opacity-50 cursor-not-allowed',
+      };
+    }
+    
+    if (status === 'completed') {
+      const foundCount = post.commentOpportunitiesFound || 0;
+      return {
+        disabled: false,
+        buttonText: foundCount > 0 ? `Re-analyze (${foundCount} found)` : 'Re-analyze',
+        icon: <MessageSquare className="w-4 h-4" />,
+        className: foundCount > 0 ? 'border-green-300 text-green-700' : '',
+      };
+    }
+    
+    if (status === 'failed') {
+      return {
+        disabled: false,
+        buttonText: 'Retry Analysis',
+        icon: <MessageSquare className="w-4 h-4" />,
+        className: 'border-red-300 text-red-700',
+      };
+    }
+    
+    // Default state (not analyzed)
+    return {
+      disabled: false,
+      buttonText: 'Analyze Comments',
+      icon: <MessageSquare className="w-4 h-4" />,
+      className: '',
     };
   };
 
@@ -527,18 +572,23 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                           Reddit
                         </a>
                       )}
-                      <button
-                        onClick={() => handleAnalyzeComments(post.id, post.permalink)}
-                        disabled={analyzingComments === post.id}
-                        className="inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {analyzingComments === post.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <MessageSquare className="w-4 h-4" />
-                        )}
-                        {analyzingComments === post.id ? 'Analyzing...' : 'Analyze Comments'}
-                      </button>
+                      {(() => {
+                        const commentStatus = getCommentAnalysisStatus(post);
+                        return (
+                          <button
+                            onClick={() => handleAnalyzeComments(post.id, post.permalink)}
+                            disabled={analyzingComments === post.id || commentStatus.disabled}
+                            className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 disabled:opacity-50 disabled:cursor-not-allowed ${commentStatus.className}`}
+                          >
+                            {analyzingComments === post.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              commentStatus.icon
+                            )}
+                            {analyzingComments === post.id ? 'Analyzing...' : commentStatus.buttonText}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -613,6 +663,58 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                     </div>
                   )}
 
+                  {/* Comment Analysis Status */}
+                  {post.commentAnalysisStatus && (
+                    <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <div className="text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          {post.commentAnalysisStatus === 'processing' && (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                              <span className="font-medium text-blue-800 dark:text-blue-200">
+                                Analyzing Comments...
+                              </span>
+                            </>
+                          )}
+                          {post.commentAnalysisStatus === 'completed' && (
+                            <>
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                              <span className="font-medium text-green-800 dark:text-green-200">
+                                Comments Analysis Complete
+                              </span>
+                            </>
+                          )}
+                          {post.commentAnalysisStatus === 'failed' && (
+                            <>
+                              <XCircle className="w-4 h-4 text-red-600" />
+                              <span className="font-medium text-red-800 dark:text-red-200">
+                                Comments Analysis Failed
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        
+                        {post.commentAnalysisStatus === 'completed' && (
+                          <div className="text-blue-700 dark:text-blue-300 text-xs">
+                            Found {post.commentOpportunitiesFound || 0} opportunities in comments
+                          </div>
+                        )}
+                        
+                        {post.commentAnalysisError && (
+                          <div className="text-red-700 dark:text-red-300 text-xs mt-1">
+                            {post.commentAnalysisError}
+                          </div>
+                        )}
+                        
+                        {post.commentAnalysisStarted && (
+                          <div className="text-gray-600 dark:text-gray-400 text-xs mt-1">
+                            Started: {formatDate(post.commentAnalysisStarted)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Generated Opportunities Preview */}
                   {opportunities.total > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -636,6 +738,9 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                           >
                             {source.opportunity.viabilityThreshold && (
                               <span className="text-green-600 dark:text-green-400">✅</span>
+                            )}
+                            {source.sourceType === 'comment' && (
+                              <span className="text-purple-600 dark:text-purple-400" title="From comments">💬</span>
                             )}
                             {source.opportunity.title}
                             <span className="text-blue-500 dark:text-blue-400">

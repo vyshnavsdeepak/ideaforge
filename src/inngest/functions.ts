@@ -1498,20 +1498,32 @@ export const analyzeRedditComments = inngest.createFunction(
     const { postId, permalink } = event.data;
     console.log(`[ANALYZE_COMMENTS] Starting comment analysis for post ${postId}`);
 
-    // Step 1: Fetch Reddit comments
-    const comments = await step.run("fetch-reddit-comments", async () => {
-      const client = createRedditClient();
-      
-      try {
-        console.log(`[ANALYZE_COMMENTS] Fetching comments from ${permalink}`);
-        const commentsData = await client.fetchPostComments(permalink);
-        console.log(`[ANALYZE_COMMENTS] Found ${commentsData.length} comments`);
-        return commentsData;
-      } catch (error) {
-        console.error(`[ANALYZE_COMMENTS] Error fetching comments:`, error);
-        throw error;
-      }
+    // Step 0: Mark job as started
+    await step.run("mark-job-started", async () => {
+      await prisma.redditPost.update({
+        where: { id: postId },
+        data: {
+          commentAnalysisStatus: 'processing',
+          commentAnalysisStarted: new Date(),
+        },
+      });
     });
+
+    try {
+      // Step 1: Fetch Reddit comments
+      const comments = await step.run("fetch-reddit-comments", async () => {
+        const client = createRedditClient();
+        
+        try {
+          console.log(`[ANALYZE_COMMENTS] Fetching comments from ${permalink}`);
+          const commentsData = await client.fetchPostComments(permalink);
+          console.log(`[ANALYZE_COMMENTS] Found ${commentsData.length} comments`);
+          return commentsData;
+        } catch (error) {
+          console.error(`[ANALYZE_COMMENTS] Error fetching comments:`, error);
+          throw error;
+        }
+      });
 
     // Step 2: Filter and process comments
     const processedComments = await step.run("process-comments", async () => {
@@ -1682,23 +1694,52 @@ export const analyzeRedditComments = inngest.createFunction(
       return { stored, total: analysisResults.opportunities.length };
     });
 
-    const finalResults = {
-      postId,
-      permalink,
-      commentsFound: comments.length,
-      commentsAnalyzed: analysisResults.totalAnalyzed,
-      opportunitiesFound: analysisResults.opportunities.length,
-      opportunitiesStored: storageResults.stored,
-      summary: analysisResults.opportunities.map(o => ({
-        title: o.opportunity.title,
-        score: o.opportunity.overallScore,
-        viable: o.opportunity.viabilityThreshold,
-        commentScore: o.commentScore,
-      })),
-    };
+      // Step 5: Mark job as completed
+      await step.run("mark-job-completed", async () => {
+        await prisma.redditPost.update({
+          where: { id: postId },
+          data: {
+            commentAnalysisStatus: 'completed',
+            commentAnalysisCompleted: new Date(),
+            commentOpportunitiesFound: storageResults.stored,
+            commentAnalysisError: null,
+          },
+        });
+      });
 
-    console.log(`[ANALYZE_COMMENTS] Comment analysis completed:`, finalResults);
-    return finalResults;
+      const finalResults = {
+        postId,
+        permalink,
+        commentsFound: comments.length,
+        commentsAnalyzed: analysisResults.totalAnalyzed,
+        opportunitiesFound: analysisResults.opportunities.length,
+        opportunitiesStored: storageResults.stored,
+        summary: analysisResults.opportunities.map(o => ({
+          title: o.opportunity.title,
+          score: o.opportunity.overallScore,
+          viable: o.opportunity.viabilityThreshold,
+          commentScore: o.commentScore,
+        })),
+      };
+
+      console.log(`[ANALYZE_COMMENTS] Comment analysis completed:`, finalResults);
+      return finalResults;
+    } catch (error) {
+      // Step 6: Mark job as failed
+      await step.run("mark-job-failed", async () => {
+        await prisma.redditPost.update({
+          where: { id: postId },
+          data: {
+            commentAnalysisStatus: 'failed',
+            commentAnalysisCompleted: new Date(),
+            commentAnalysisError: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      });
+
+      console.error(`[ANALYZE_COMMENTS] Comment analysis failed for post ${postId}:`, error);
+      throw error;
+    }
   }
 );
 
