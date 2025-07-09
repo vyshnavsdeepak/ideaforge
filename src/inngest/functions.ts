@@ -376,6 +376,16 @@ export const analyzeOpportunity = inngest.createFunction(
           author,
           score,
           numComments,
+        }, {
+          trackCosts: true,
+          redditPostId: postId,
+          sessionData: {
+            sessionId: event.id || `individual_${postId}`,
+            sessionType: 'individual',
+            triggeredBy: 'inngest-individual',
+            subreddit,
+            postsRequested: 1,
+          },
         });
         
         console.log(`[AI] Analysis completed. Is opportunity: ${result.isOpportunity}`);
@@ -1571,6 +1581,16 @@ export const analyzeRedditComments = inngest.createFunction(
             author: String(c.author),
             score: Number(c.score),
             numComments: 0,
+          }, {
+            trackCosts: true,
+            redditPostId: `comment_${c.id}`,
+            sessionData: {
+              sessionId: `comment_analysis_${event.data.postId}`,
+              sessionType: 'batch',
+              triggeredBy: 'comment-analysis',
+              subreddit: String(c.subreddit || 'unknown'),
+              postsRequested: processedComments.length,
+            },
           });
 
           if (analysis.isOpportunity && analysis.opportunity) {
@@ -2280,6 +2300,16 @@ export const analyzeUserActivity = inngest.createFunction(
                 author: comment.author,
                 score: comment.score,
                 numComments: 0,
+              }, {
+                trackCosts: true,
+                redditPostId: `user_comment_${comment.redditId}`,
+                sessionData: {
+                  sessionId: `user_analysis_${username}`,
+                  sessionType: 'batch',
+                  triggeredBy: 'user-activity-analysis',
+                  subreddit: comment.subreddit,
+                  postsRequested: comments.length,
+                },
               });
 
               // Update comment analysis status
