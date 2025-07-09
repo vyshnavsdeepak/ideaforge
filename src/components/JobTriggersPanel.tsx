@@ -62,15 +62,14 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
             </h3>
             <div className="space-y-3">
               <JobTriggerButton
-                endpoint="/api/inngest"
-                label="Analyze Unprocessed Posts"
-                icon="🔍"
-                description="Trigger AI analysis for posts without opportunities"
+                endpoint="/api/admin/process-unprocessed-posts"
+                label="Batch Process Unprocessed"
+                icon="🔄"
+                description="Comprehensive batch processing of all unprocessed Reddit posts (up to 500)"
                 variant="primary"
                 requireAuth={true}
                 payload={{
-                  name: 'ai/batch-analyze.opportunities',
-                  data: { type: 'unprocessed' }
+                  limit: 500
                 }}
               />
               
