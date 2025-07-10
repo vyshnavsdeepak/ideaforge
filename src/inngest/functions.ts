@@ -2500,7 +2500,7 @@ export const clusterOpportunities = inngest.createFunction(
     console.log(`[CLUSTERING] Starting opportunity clustering (force: ${forceRecalculate})`);
 
     // Import clustering engine
-    const { opportunityClusteringEngine } = await import("../lib/opportunity-clustering");
+    const { opportunityClusteringEngine } = await import("@/opportunities");
 
     // Step 1: Cluster similar opportunities
     const clusters = await step.run("cluster-similar-opportunities", async () => {

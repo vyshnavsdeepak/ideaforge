@@ -95,7 +95,7 @@ export class CommentStorageService {
               isTopLevel,
               depth,
               permalink: comment.parent_id ? null : `/r/${post.subreddit}/comments/${post.redditId}/_/${comment.id}/`,
-              rawData: JSON.parse(JSON.stringify(comment))
+              rawData: comment as Record<string, unknown>
             }
           });
           
