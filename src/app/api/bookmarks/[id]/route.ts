@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { prisma } from '../../../../lib/prisma';
 import { z } from 'zod';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../../lib/auth-options';
+import { ensureAdminUser } from '../../../../lib/ensure-admin-user';
 
 const updateBookmarkSchema = z.object({
   notes: z.string().optional(),
@@ -18,18 +19,14 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await getServerSession(authOptions) as any;
+    if (!session || !session.user || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const bookmark = await prisma.opportunityBookmark.findFirst({
       where: { 
@@ -82,18 +79,14 @@ export async function PUT(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await getServerSession(authOptions) as any;
+    if (!session || !session.user || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     const body = await request.json();
     const validatedData = updateBookmarkSchema.parse(body);
@@ -167,18 +160,14 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const session = await getServerSession(authOptions) as any;
+    if (!session || !session.user || !session.user.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Ensure admin user exists (handles cases where admin hasn't signed out/in after auth changes)
+    const user = await ensureAdminUser();
 
     // Check if bookmark exists and belongs to user
     const existingBookmark = await prisma.opportunityBookmark.findFirst({
