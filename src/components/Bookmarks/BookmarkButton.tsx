@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Bookmark, BookmarkPlus, Plus, X } from 'lucide-react';
+import { Bookmark, Plus, X, ChevronDown } from 'lucide-react';
 
 interface BookmarkCollection {
   id: string;
@@ -188,17 +188,17 @@ export function BookmarkButton({
   }
 
   return (
-    <div className="relative">
+    <div className="relative flex">
       {/* Main bookmark button */}
       <button
         onClick={handleQuickBookmark}
         disabled={isProcessing}
-        className={`${buttonBaseClasses} ${
+        className={`${buttonBaseClasses} rounded-r-none ${
           isBookmarked
             ? 'text-yellow-600 hover:text-yellow-700 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200'
             : 'text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-300'
         }`}
-        title={isBookmarked ? 'Bookmarked' : 'Add bookmark'}
+        title={isBookmarked ? 'Quick remove bookmark' : 'Quick bookmark'}
       >
         <div className="flex items-center space-x-2">
           <Bookmark className={`${config.icon} ${isBookmarked ? 'fill-current' : ''}`} />
@@ -210,24 +210,48 @@ export function BookmarkButton({
         </div>
       </button>
 
-      {/* Dropdown trigger for collections */}
-      {isBookmarked && (
-        <button
-          onClick={() => setShowDropdown(!showDropdown)}
-          className={`${buttonBaseClasses} ml-1 text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-300`}
-          title="Manage collections"
-        >
-          <BookmarkPlus className={config.icon} />
-        </button>
-      )}
+      {/* Dropdown trigger for collections - always visible */}
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        disabled={isProcessing}
+        className={`${config.button} rounded-l-none border-l-0 transition-all duration-200 ${
+          isBookmarked
+            ? 'text-yellow-600 hover:text-yellow-700 bg-yellow-50 hover:bg-yellow-100 border border-yellow-200'
+            : 'text-gray-600 hover:text-gray-700 bg-white hover:bg-gray-50 border border-gray-300'
+        } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+        title="Choose collection"
+      >
+        <ChevronDown className={`${config.icon} transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
+      </button>
 
       {/* Collections dropdown */}
       {showDropdown && (
         <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
           <div className="p-3">
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-              Manage Collections
+              {isBookmarked ? 'Manage Collections' : 'Save to Collection'}
             </h3>
+            
+            {/* Quick bookmark option for unbookmarked items */}
+            {!isBookmarked && (
+              <div className="mb-3">
+                <button
+                  onClick={() => {
+                    handleQuickBookmark();
+                    setShowDropdown(false);
+                  }}
+                  className="flex items-center space-x-2 p-2 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 w-full text-left border border-blue-200 dark:border-blue-800"
+                >
+                  <Bookmark className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-blue-900 dark:text-blue-200 font-medium">
+                    Quick Bookmark
+                  </span>
+                  <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">
+                    Default
+                  </span>
+                </button>
+              </div>
+            )}
             
             {/* Current bookmarks */}
             {bookmarks.length > 0 && (
@@ -239,7 +263,7 @@ export function BookmarkButton({
                   {bookmarks.map((bookmark) => (
                     <div
                       key={bookmark.id}
-                      className="flex items-center justify-between p-2 rounded-md bg-gray-50 dark:bg-gray-700"
+                      className="flex items-center justify-between p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
                     >
                       <div className="flex items-center space-x-2">
                         <span className="text-sm">{bookmark.collection.icon}</span>
@@ -264,7 +288,7 @@ export function BookmarkButton({
             {collections.length > 0 && (
               <div>
                 <h4 className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  Add to collection:
+                  {isBookmarked ? 'Add to another collection:' : 'Or choose a collection:'}
                 </h4>
                 <div className="space-y-1">
                   {collections
@@ -285,6 +309,21 @@ export function BookmarkButton({
                 </div>
               </div>
             )}
+            
+            {/* Create new collection option */}
+            <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  // TODO: Implement create new collection
+                  console.log('Create new collection');
+                  setShowDropdown(false);
+                }}
+                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 w-full text-left text-blue-600 dark:text-blue-400"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm font-medium">Create New Collection</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
