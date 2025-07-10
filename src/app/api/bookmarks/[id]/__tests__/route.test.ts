@@ -46,6 +46,8 @@ describe('/api/bookmarks/[id]', () => {
       id: 'user123',
       email: 'test@example.com',
       name: 'Test User',
+      emailVerified: null,
+      image: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     // Build order clause
     const orderClause = [
       { [sortBy]: sortOrder },
-      { sourceCount: 'desc' }, // Default secondary sort
+      { sourceCount: 'desc' as const }, // Default secondary sort
     ];
 
     // Calculate pagination
