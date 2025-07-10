@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
 // Mock the prisma module
-jest.mock('@/shared', () => ({
+jest.mock('@/shared/services/prisma', () => ({
   prisma: {
     bookmarkCollection: {
       findUnique: jest.fn(),

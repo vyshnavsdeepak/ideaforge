@@ -3,7 +3,7 @@ import { prisma } from '@/shared/services/prisma';
 import { NextRequest } from 'next/server';
 
 // Mock the prisma module for API tests
-jest.mock('@/shared', () => ({
+jest.mock('@/shared/services/prisma', () => ({
   prisma: {
     opportunity: {
       count: jest.fn(),
