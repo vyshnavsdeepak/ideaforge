@@ -1618,6 +1618,38 @@ export const analyzeRedditComments = inngest.createFunction(
       return { opportunities, totalAnalyzed: processedComments.length };
     });
 
+    // Define the type for comment analysis results
+    interface CommentAnalysisResult {
+      opportunity: {
+        title: string;
+        description: string;
+        currentSolution?: string;
+        proposedSolution: string;
+        marketContext?: string;
+        implementationNotes?: string;
+        delta4Scores: {
+          speed: number;
+          convenience: number;
+          trust: number;
+          price: number;
+          status: number;
+          predictability: number;
+          uiUx: number;
+          easeOfUse: number;
+          legalFriction: number;
+          emotionalComfort: number;
+        };
+        overallScore: number;
+        viabilityThreshold: boolean;
+        marketSize?: string;
+        complexity?: string;
+        successProbability?: string;
+        categories?: Record<string, string>;
+        marketValidation?: Record<string, string | number>;
+      };
+      confidence: number;
+    }
+
     // Step 4: Store results in database
     const storageResults = await step.run("store-comment-analysis-results", async () => {
       // Get the original post
@@ -1631,96 +1663,90 @@ export const analyzeRedditComments = inngest.createFunction(
 
       // Store each comment-derived opportunity
       let stored = 0;
+      
+      // Since we're temporarily returning empty opportunities array, skip storage
+      // TODO: Re-enable when comment analysis is implemented
+      if (analysisResults.opportunities.length === 0) {
+        return { stored: 0 };
+      }
+      
+      // This code won't run until comment analysis is re-enabled
+      type OpportunityCreateInput = Prisma.OpportunityCreateInput;
+      
       for (const result of analysisResults.opportunities) {
         try {
-          const typedResult = result as { opportunity: unknown; confidence: number };
-          const opp = typedResult.opportunity;
-          // Create the opportunity
+          const typedResult = result as CommentAnalysisResult;
+          
+          // Check for duplicate opportunity
+          const existingOpp = await checkOpportunityDuplication(
+            typedResult.opportunity.title,
+            typedResult.opportunity.description,
+            typedResult.opportunity.proposedSolution,
+            typedResult.opportunity.categories?.niche || 'general'
+          );
+          
+          if (existingOpp.isDuplicate) {
+            console.log(`[ANALYZE_COMMENTS] Duplicate opportunity from comment: ${typedResult.opportunity.title}`);
+            continue;
+          }
+
+          // Create opportunity data
+          const opportunityData: OpportunityCreateInput = {
+            title: typedResult.opportunity.title,
+            description: typedResult.opportunity.description,
+            proposedSolution: typedResult.opportunity.proposedSolution,
+            marketContext: typedResult.opportunity.marketContext || '',
+            implementationNotes: typedResult.opportunity.implementationNotes || '',
+            marketSize: typedResult.opportunity.marketSize || 'unknown',
+            complexity: typedResult.opportunity.complexity || 'unknown',
+            successProbability: typedResult.opportunity.successProbability || 'unknown',
+            subreddit: post.subreddit,
+            
+            // Delta 4 scores
+            speedScore: typedResult.opportunity.delta4Scores.speed,
+            convenienceScore: typedResult.opportunity.delta4Scores.convenience,
+            trustScore: typedResult.opportunity.delta4Scores.trust,
+            priceScore: typedResult.opportunity.delta4Scores.price,
+            statusScore: typedResult.opportunity.delta4Scores.status,
+            predictabilityScore: typedResult.opportunity.delta4Scores.predictability,
+            uiUxScore: typedResult.opportunity.delta4Scores.uiUx,
+            easeOfUseScore: typedResult.opportunity.delta4Scores.easeOfUse,
+            legalFrictionScore: typedResult.opportunity.delta4Scores.legalFriction,
+            emotionalComfortScore: typedResult.opportunity.delta4Scores.emotionalComfort,
+            
+            // Calculated values
+            overallScore: typedResult.opportunity.overallScore,
+            viabilityThreshold: typedResult.opportunity.viabilityThreshold,
+            
+            // Optional categories with defaults
+            businessType: typedResult.opportunity.categories?.businessType || 'unknown',
+            industryVertical: typedResult.opportunity.categories?.industryVertical || 'unknown',
+            niche: typedResult.opportunity.categories?.niche || 'general'
+          };
+
+          // Store the opportunity
           const opportunity = await prisma.opportunity.create({
+            data: opportunityData
+          });
+
+          // Create the opportunity source relationship
+          await prisma.opportunitySource.create({
             data: {
-              title: opp.title,
-              description: opp.description,
-              currentSolution: opp.currentSolution,
-              proposedSolution: opp.proposedSolution,
-              marketContext: opp.marketContext,
-              implementationNotes: opp.implementationNotes,
-              
-              speedScore: opp.delta4Scores.speed,
-              convenienceScore: opp.delta4Scores.convenience,
-              trustScore: opp.delta4Scores.trust,
-              priceScore: opp.delta4Scores.price,
-              statusScore: opp.delta4Scores.status,
-              predictabilityScore: opp.delta4Scores.predictability,
-              uiUxScore: opp.delta4Scores.uiUx,
-              easeOfUseScore: opp.delta4Scores.easeOfUse,
-              legalFrictionScore: opp.delta4Scores.legalFriction,
-              emotionalComfortScore: opp.delta4Scores.emotionalComfort,
-              
-              overallScore: opp.overallScore,
-              viabilityThreshold: opp.viabilityThreshold,
-              
-              subreddit: post.subreddit,
-              marketSize: opp.marketSize,
-              complexity: opp.complexity,
-              successProbability: opp.successProbability,
-              
-              // Categories
-              businessType: opp.categories.businessType,
-              businessModel: opp.categories.businessModel,
-              revenueModel: opp.categories.revenueModel,
-              pricingModel: opp.categories.pricingModel,
-              platform: opp.categories.platform,
-              mobileSupport: opp.categories.mobileSupport,
-              deploymentType: opp.categories.deploymentType,
-              developmentType: opp.categories.developmentType,
-              targetAudience: opp.categories.targetAudience,
-              userType: opp.categories.userType,
-              technicalLevel: opp.categories.technicalLevel,
-              ageGroup: opp.categories.ageGroup,
-              geography: opp.categories.geography,
-              marketType: opp.categories.marketType,
-              economicLevel: opp.categories.economicLevel,
-              industryVertical: opp.categories.industryVertical,
-              niche: opp.categories.niche,
-              developmentComplexity: opp.categories.developmentComplexity,
-              teamSize: opp.categories.teamSize,
-              capitalRequirement: opp.categories.capitalRequirement,
-              developmentTime: opp.categories.developmentTime,
-              marketSizeCategory: opp.categories.marketSizeCategory,
-              competitionLevel: opp.categories.competitionLevel,
-              marketTrend: opp.categories.marketTrend,
-              growthPotential: opp.categories.growthPotential,
-              acquisitionStrategy: opp.categories.acquisitionStrategy,
-              scalabilityType: opp.categories.scalabilityType,
-              
-              // Market Validation Fields
-              marketValidationScore: opp.marketValidation.marketValidationScore,
-              engagementLevel: opp.marketValidation.engagementLevel,
-              problemFrequency: opp.marketValidation.problemFrequency,
-              customerType: opp.marketValidation.customerType,
-              paymentWillingness: opp.marketValidation.paymentWillingness,
-              competitiveAnalysis: opp.marketValidation.competitiveAnalysis,
-              validationTier: opp.marketValidation.validationTier,
-              
-              // Link to the original post
-              redditPosts: {
-                create: {
-                  redditPostId: postId,
-                  sourceType: 'comment',
-                  confidence: typedResult.confidence,
-                }
-              }
+              opportunityId: opportunity.id,
+              redditPostId: post.id,
+              sourceType: "comment",
+              confidence: typedResult.confidence || 0.8,
             }
           });
 
           stored++;
-          console.log(`[ANALYZE_COMMENTS] Stored comment opportunity: ${opportunity.title}`);
+          console.log(`[ANALYZE_COMMENTS] Stored comment-derived opportunity: ${opportunity.title}`);
         } catch (error) {
           console.error(`[ANALYZE_COMMENTS] Error storing comment opportunity:`, error);
         }
       }
 
-      return { stored, total: analysisResults.opportunities.length };
+      return { stored };
     });
 
       // Step 5: Mark job as completed
@@ -1743,12 +1769,15 @@ export const analyzeRedditComments = inngest.createFunction(
         commentsAnalyzed: analysisResults.totalAnalyzed,
         opportunitiesFound: analysisResults.opportunities.length,
         opportunitiesStored: storageResults.stored,
-        summary: analysisResults.opportunities.map((o: unknown) => ({
-          title: o.opportunity?.title || 'Unknown',
-          score: o.opportunity?.overallScore || 0,
-          viable: o.opportunity?.viabilityThreshold || 0,
-          commentScore: o.commentScore || 0,
-        })),
+        summary: analysisResults.opportunities.map((o: unknown) => {
+          const oppData = o as CommentAnalysisResult;
+          return {
+            title: oppData.opportunity?.title || 'Unknown',
+            score: oppData.opportunity?.overallScore || 0,
+            viable: oppData.opportunity?.viabilityThreshold || false,
+            commentScore: 0, // Not available in the current structure
+          };
+        }),
       };
 
       console.log(`[ANALYZE_COMMENTS] Comment analysis completed:`, finalResults);
