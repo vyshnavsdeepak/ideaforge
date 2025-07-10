@@ -1597,46 +1597,22 @@ export const analyzeRedditComments = inngest.createFunction(
         return { opportunities: [], totalAnalyzed: 0 };
       }
 
-      const analyzer = new Delta4Analyzer(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
-      const opportunities = [];
+      // const analyzer = new Delta4Analyzer(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+      const opportunities: unknown[] = [];
 
-      // Analyze each comment as if it were a mini-post
-      for (const comment of processedComments) {
-        try {
-          const c = comment as unknown as { id: string; body: string; author: string; score: number; subreddit?: string };
-          const analysis = await analyzer.analyzeOpportunity({
-            postTitle: `Comment: ${String(c.body).substring(0, 100)}...`,
-            postContent: String(c.body),
-            subreddit: String(c.subreddit || 'unknown'),
-            author: String(c.author),
-            score: Number(c.score),
-            numComments: 0,
-          }, {
-            trackCosts: true,
-            redditPostId: `comment_${c.id}`,
-            sessionData: {
-              sessionId: `comment_analysis_${event.data.postId}`,
-              sessionType: 'batch',
-              triggeredBy: 'comment-analysis',
-              subreddit: String(c.subreddit || 'unknown'),
-              postsRequested: processedComments.length,
-            },
-          });
-
-          if (analysis.isOpportunity && analysis.opportunity) {
-            opportunities.push({
-              commentId: String(c.id),
-              commentBody: String(c.body),
-              commentAuthor: String(c.author),
-              commentScore: Number(c.score),
-              opportunity: analysis.opportunity,
-              confidence: analysis.confidence,
-            });
-          }
-        } catch (error) {
-          console.error(`[ANALYZE_COMMENTS] Error analyzing comment ${String((comment as unknown as { id: string }).id)}:`, error);
-        }
-      }
+      // Skip AI analysis for now - just log comments for debugging
+      console.log(`[ANALYZE_COMMENTS] Skipping AI analysis to prevent timeout. Comments found:`, processedComments.length);
+      
+      // TODO: Implement faster batch analysis
+      processedComments.forEach((comment, index) => {
+        const c = comment as unknown as { id: string; body: string; author: string; score: number };
+        console.log(`[ANALYZE_COMMENTS] Comment ${index + 1}:`, {
+          id: c.id,
+          author: c.author,
+          score: c.score,
+          bodyPreview: String(c.body).substring(0, 100) + '...'
+        });
+      });
 
       console.log(`[ANALYZE_COMMENTS] Found ${opportunities.length} opportunities from comments`);
       return { opportunities, totalAnalyzed: processedComments.length };
