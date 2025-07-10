@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { GET } from '../route';
 
 // Mock the clustering engine
-jest.mock('@/lib/semantic-clustering', () => ({
+jest.mock('@/opportunities', () => ({
   clusteringEngine: {
     getTopDemandClusters: jest.fn().mockResolvedValue([
       {

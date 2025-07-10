@@ -2,6 +2,7 @@ import { GET, PUT, DELETE } from '../route';
 import { prisma } from '@/shared/services/prisma';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import { ensureAdminUser } from '@/auth';
 
 // Mock the prisma module
 jest.mock('@/shared/services/prisma', () => ({
@@ -19,6 +20,12 @@ jest.mock('next-auth/next', () => ({
   getServerSession: jest.fn(),
 }));
 
+// Mock auth domain
+jest.mock('@/auth', () => ({
+  authOptions: {},
+  ensureAdminUser: jest.fn(),
+}));
+
 const mockPrisma = prisma as unknown as {
   bookmarkCollection: {
     findUnique: jest.MockedFunction<() => Promise<unknown | null>>;
@@ -28,10 +35,20 @@ const mockPrisma = prisma as unknown as {
 };
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+const mockEnsureAdminUser = ensureAdminUser as jest.MockedFunction<typeof ensureAdminUser>;
 
 describe('/api/bookmarks/[id]', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    
+    // Mock ensureAdminUser to return a user by default
+    mockEnsureAdminUser.mockResolvedValue({
+      id: 'test-user',
+      email: 'test@example.com',
+      name: 'Test User',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   describe('GET /api/bookmarks/[id]', () => {

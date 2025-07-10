@@ -1,6 +1,12 @@
 import { GET } from '../opportunities/route';
 import { prisma } from '@/shared/services/prisma';
 import { NextRequest } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+
+// Mock next-auth session
+jest.mock('next-auth/next', () => ({
+  getServerSession: jest.fn(),
+}));
 
 // Mock the prisma module for API tests
 jest.mock('@/shared/services/prisma', () => ({
@@ -19,9 +25,16 @@ const mockPrisma = prisma as unknown as {
   };
 };
 
+const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+
 describe('/api/opportunities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock authenticated session by default
+    mockGetServerSession.mockResolvedValue({
+      user: { id: 'test-user', email: 'test@example.com' },
+      expires: '2024-12-31',
+    });
   });
 
   describe('GET /api/opportunities', () => {
