@@ -100,26 +100,82 @@ export interface RedditAPIError extends Error {
 }
 
 export class RedditClient {
-  protected readonly baseUrl = 'https://www.reddit.com';
+  protected readonly baseUrl = 'https://oauth.reddit.com';
+  protected readonly authUrl = 'https://www.reddit.com/api/v1/access_token';
+  protected accessToken: string | null = null;
+  protected tokenExpiry: number = 0;
+  
   protected readonly headers = {
     'User-Agent': process.env.REDDIT_USER_AGENT || 'web:IdeaForge:v2.0.0 (by /u/OpportunityBot)',
     'Accept': 'application/json',
   };
+
+  private async getAccessToken(): Promise<string> {
+    // Check if we have a valid token
+    if (this.accessToken && Date.now() < this.tokenExpiry) {
+      return this.accessToken;
+    }
+
+    // Get new access token
+    const clientId = process.env.REDDIT_CLIENT_ID;
+    const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+    const username = process.env.REDDIT_USERNAME;
+    const password = process.env.REDDIT_PASSWORD;
+
+    if (!clientId || !clientSecret || !username || !password) {
+      throw new Error('Reddit OAuth credentials not configured');
+    }
+
+    const authString = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    
+    const response = await fetch(this.authUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${authString}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': this.headers['User-Agent'],
+      },
+      body: `grant_type=password&username=${username}&password=${password}`,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Reddit OAuth failed: ${response.status} ${response.statusText}`);
+    }
+
+    const tokenData = await response.json();
+    this.accessToken = tokenData.access_token;
+    // Set expiry to 50 minutes (tokens last 1 hour)
+    this.tokenExpiry = Date.now() + (tokenData.expires_in - 600) * 1000;
+    
+    console.log(`[REDDIT_AUTH] Got new access token, expires in ${tokenData.expires_in} seconds`);
+    return this.accessToken;
+  }
+
+  private async getAuthenticatedHeaders(): Promise<Record<string, string>> {
+    const token = await this.getAccessToken();
+    return {
+      ...this.headers,
+      'Authorization': `Bearer ${token}`,
+    };
+  }
 
   async fetchSubredditPosts(
     subreddit: string,
     sort: 'hot' | 'new' | 'top' | 'rising' = 'hot',
     limit: number = 25
   ): Promise<ProcessedRedditPost[]> {
-    const url = `${this.baseUrl}/r/${subreddit}/${sort}.json?limit=${limit}`;
+    const url = `${this.baseUrl}/r/${subreddit}/${sort}?limit=${limit}`;
     
     // Create timeout controller for older Node.js versions
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     try {
+      console.log(`[REDDIT] Fetching ${sort} posts from r/${subreddit} (limit: ${limit})`);
+      
+      const authHeaders = await this.getAuthenticatedHeaders();
       const response = await fetch(url, {
-        headers: this.headers,
+        headers: authHeaders,
         signal: controller.signal,
       });
 
@@ -270,15 +326,18 @@ export class RedditClient {
   };
 
   async fetchPostComments(permalink: string): Promise<RedditComment[]> {
-    // Ensure permalink has correct format for comments
+    // Ensure permalink has correct format for comments  
     const commentsUrl = `${this.baseUrl}${permalink}.json`;
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     try {
+      console.log(`[REDDIT] Fetching comments from ${permalink}`);
+      
+      const authHeaders = await this.getAuthenticatedHeaders();
       const response = await fetch(commentsUrl, {
-        headers: this.headers,
+        headers: authHeaders,
         signal: controller.signal,
       });
 

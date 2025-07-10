@@ -1,0 +1,23 @@
+{
+  "exportDate": "2025-07-10T03:52:45.973Z",
+  "totalRecords": 227,
+  "tables": [
+    {
+      "table": "RedditPost",
+      "count": 118
+    },
+    {
+      "table": "Opportunity",
+      "count": 62
+    },
+    {
+      "table": "SubredditCursor",
+      "count": 8
+    },
+    {
+      "table": "AIUsageLog",
+      "count": 37
+    }
+  ],
+  "sampleDataFile": "sample-data-2025-07-10.json"
+}

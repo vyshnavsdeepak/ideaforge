@@ -3,6 +3,12 @@ import { RedditClient } from '../reddit'
 // Mock fetch globally
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
 
+// Mock environment variables for OAuth
+process.env.REDDIT_CLIENT_ID = 'test_client_id'
+process.env.REDDIT_CLIENT_SECRET = 'test_client_secret'
+process.env.REDDIT_USERNAME = 'test_user'
+process.env.REDDIT_PASSWORD = 'test_pass'
+
 describe('Reddit Client', () => {
   let client: RedditClient
 
@@ -41,10 +47,16 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       const posts = await client.fetchSubredditPosts('test')
 
@@ -70,11 +82,17 @@ describe('Reddit Client', () => {
     })
 
     test('handles API errors gracefully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      } as Response)
+      // Mock OAuth token success, then API error
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: 'Not Found',
+        } as Response)
 
       await expect(client.fetchSubredditPosts('nonexistent'))
         .rejects.toThrow('Subreddit r/nonexistent not found or may be private')
@@ -158,10 +176,16 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       const posts = await client.fetchSubredditPosts('test')
 
@@ -199,10 +223,16 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       const posts = await client.fetchSubredditPosts('test')
 
@@ -217,28 +247,54 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock sequence: OAuth token, then 3 API calls
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
-      // Test different sort options
+      // Test different sort options - now using OAuth endpoints
       await client.fetchSubredditPosts('test', 'hot', 25)
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.reddit.com/r/test/hot.json?limit=25',
-        expect.any(Object)
+        'https://oauth.reddit.com/r/test/hot?limit=25',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test_token'
+          })
+        })
       )
 
       await client.fetchSubredditPosts('test', 'new', 10)
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.reddit.com/r/test/new.json?limit=10',
-        expect.any(Object)
+        'https://oauth.reddit.com/r/test/new?limit=10',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test_token'
+          })
+        })
       )
 
       await client.fetchSubredditPosts('test', 'top', 50)
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.reddit.com/r/test/top.json?limit=50',
-        expect.any(Object)
+        'https://oauth.reddit.com/r/test/top?limit=50',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test_token'
+          })
+        })
       )
     })
 
@@ -249,10 +305,16 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       const posts = await client.fetchSubredditPosts('test')
 
@@ -288,10 +350,16 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       const posts = await client.fetchSubredditPosts('test')
 
@@ -308,18 +376,36 @@ describe('Reddit Client', () => {
         }
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockRedditResponse,
-      } as Response)
+      // Mock OAuth token first, then the API response
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ access_token: 'test_token', expires_in: 3600 }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockRedditResponse,
+        } as Response)
 
       await client.fetchSubredditPosts('test')
 
+      // Check that the OAuth request has the correct User-Agent
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
+        'https://www.reddit.com/api/v1/access_token',
         expect.objectContaining({
           headers: expect.objectContaining({
             'User-Agent': expect.stringMatching(/^web:IdeaForge:v2\.0\.0 \(by \/u\/.*\)$/),
+          }),
+        })
+      )
+
+      // Check that the API request has the correct User-Agent and Authorization
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://oauth.reddit.com/r/test/hot?limit=25',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'User-Agent': expect.stringMatching(/^web:IdeaForge:v2\.0\.0 \(by \/u\/.*\)$/),
+            'Authorization': 'Bearer test_token',
           }),
         })
       )
