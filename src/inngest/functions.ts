@@ -2559,3 +2559,191 @@ export const clusterOpportunities = inngest.createFunction(
   }
 );
 
+// Deep dive subreddit scraping function
+export const deepDiveScrapingFunction = inngest.createFunction(
+  { 
+    id: "deep-dive-scraping",
+    concurrency: {
+      limit: 1, // Only one deep dive at a time to avoid overwhelming Reddit
+    },
+    retries: 0, // Don't retry deep dives automatically
+  },
+  { event: "reddit/deep-dive.scrape" },
+  async ({ event, step }) => {
+    const {
+      subreddit,
+      targetDate: targetDateStr,
+      maxPosts,
+      sortTypes = ['hot', 'new', 'top'],
+      timeframes = ['week', 'month', 'year', 'all'],
+      includeComments = false,
+      batchSize = 100,
+      delayBetweenRequests = 1000,
+      triggerImmediateAI = false,
+      triggeredBy = 'unknown'
+    } = event.data;
+
+    const targetDate = new Date(targetDateStr);
+    console.log(`[DEEP_DIVE] Starting comprehensive deep dive for r/${subreddit}`);
+    console.log(`[DEEP_DIVE] Target date: ${targetDate.toISOString()}, Max posts: ${maxPosts || 'unlimited'}`);
+    console.log(`[DEEP_DIVE] Triggered by: ${triggeredBy}`);
+
+    // Import the deep dive scraper
+    const deepDiveModule = await import('@/reddit/services/deep-dive-scraper');
+    const scraper = new deepDiveModule.DeepDiveScraper();
+
+    // Step 1: Estimate effort and log it
+    const estimate = await step.run("estimate-effort", async () => {
+      const effort = await scraper.estimateDeepDiveEffort(subreddit, targetDate);
+      console.log(`[DEEP_DIVE] Estimated effort:`, effort);
+      return effort;
+    });
+
+    // Step 2: Perform the deep dive scraping
+    const scrapingResult = await step.run("perform-deep-dive", async () => {
+      let progressCount = 0;
+      
+      const result = await scraper.scrapeSubredditDeepDive({
+        subreddit,
+        targetDate,
+        maxPosts,
+        sortTypes,
+        timeframes,
+        includeComments,
+        batchSize,
+        delayBetweenRequests,
+        onProgress: (progress) => {
+          progressCount++;
+          // Log progress every 10 updates to avoid spam
+          if (progressCount % 10 === 0) {
+            console.log(`[DEEP_DIVE] Progress: ${progress.totalScraped} scraped, ${progress.newPosts} new, current date: ${progress.currentDate.toISOString()}`);
+          }
+        }
+      });
+
+      console.log(`[DEEP_DIVE] Deep dive completed:`, {
+        totalPostsScraped: result.totalPostsScraped,
+        newPostsStored: result.newPostsStored,
+        duplicatesSkipped: result.duplicatesSkipped,
+        duration: `${Math.round(result.duration / 1000)}s`,
+        errors: result.errors.length
+      });
+
+      return result;
+    });
+
+    // Step 3: Trigger AI processing if requested and we have new posts
+    const aiProcessingResult = (triggerImmediateAI && scrapingResult.newPostsStored > 0) 
+      ? await step.run("trigger-ai-processing", async () => {
+          console.log(`[DEEP_DIVE] Triggering immediate AI processing for ${scrapingResult.newPostsStored} new posts`);
+          
+          // Get the newly stored posts for AI processing
+          const newPosts = await prisma.redditPost.findMany({
+            where: {
+              subreddit,
+              processedAt: null,
+              processingError: null,
+              createdAt: {
+                gte: new Date(Date.now() - 60 * 60 * 1000) // Posts from last hour (should cover our scraping window)
+              }
+            },
+            orderBy: { createdUtc: 'desc' },
+            take: Math.min(scrapingResult.newPostsStored, 200) // Don't overwhelm the AI
+          });
+
+          if (newPosts.length > 0) {
+            // Send for batch AI processing
+            const aiEvent = await inngest.send({
+              name: "ai/batch-analyze.opportunities",
+              data: {
+                subreddit: `${subreddit}-deep-dive`,
+                posts: newPosts.map(post => ({
+                  postId: post.id,
+                  postTitle: post.title,
+                  postContent: post.content || '',
+                  subreddit: post.subreddit,
+                  author: post.author,
+                  score: post.score,
+                  numComments: post.numComments,
+                })),
+                triggeredBy: "deep-dive-scraping",
+                batchInfo: {
+                  batchNumber: 1,
+                  totalBatches: 1,
+                  postsInBatch: newPosts.length,
+                  totalPosts: newPosts.length,
+                  isDeepDiveProcessing: true,
+                  timestamp: new Date().toISOString(),
+                }
+              }
+            });
+
+            console.log(`[DEEP_DIVE] AI processing event sent for ${newPosts.length} posts, event ID: ${aiEvent.ids[0]}`);
+            return {
+              aiTriggered: true,
+              postsQueued: newPosts.length,
+              eventId: aiEvent.ids[0]
+            };
+          } else {
+            console.log(`[DEEP_DIVE] No recent posts found for AI processing`);
+            return {
+              aiTriggered: false,
+              reason: 'No recent posts found for processing'
+            };
+          }
+        })
+      : {
+          aiTriggered: false,
+          reason: triggerImmediateAI ? 'No new posts to process' : 'AI processing not requested'
+        };
+
+    // Step 4: Generate summary and recommendations
+    const summary = await step.run("generate-summary", async () => {
+      const efficiencyRate = scrapingResult.totalPostsScraped > 0 
+        ? (scrapingResult.newPostsStored / scrapingResult.totalPostsScraped) * 100 
+        : 0;
+
+      const avgPostsPerRequest = scrapingResult.totalRequests > 0 
+        ? Math.round(scrapingResult.totalPostsScraped / scrapingResult.totalRequests)
+        : 0;
+
+      return {
+        subreddit,
+        targetDate,
+        completedAt: new Date().toISOString(),
+        performance: {
+          totalScraped: scrapingResult.totalPostsScraped,
+          newPostsStored: scrapingResult.newPostsStored,
+          duplicatesSkipped: scrapingResult.duplicatesSkipped,
+          efficiencyRate: `${efficiencyRate.toFixed(1)}%`,
+          duration: `${Math.round(scrapingResult.duration / 1000)}s`,
+          avgPostsPerRequest,
+          totalRequests: scrapingResult.totalRequests
+        },
+        dateRange: {
+          oldest: new Date(scrapingResult.oldestPostDate).toISOString(),
+          newest: new Date(scrapingResult.newestPostDate).toISOString(),
+          targetReached: new Date(scrapingResult.oldestPostDate) <= targetDate
+        },
+        errors: scrapingResult.errors,
+        aiProcessing: aiProcessingResult,
+        recommendations: efficiencyRate < 50 
+          ? ['Consider checking subreddit activity levels', 'Verify target date is appropriate for this subreddit']
+          : efficiencyRate > 90 
+          ? ['Consider extending target date further back', 'This subreddit appears very active']
+          : ['Good balance of new vs existing content']
+      };
+    });
+
+    console.log(`[DEEP_DIVE] Deep dive operation completed for r/${subreddit}`);
+    
+    return {
+      success: scrapingResult.isComplete,
+      deepDiveResult: scrapingResult,
+      estimate,
+      summary,
+      triggeredBy
+    };
+  }
+);
+

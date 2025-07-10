@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { ProcessedRedditPost } from '@/reddit/services/reddit-client';
 
 /**
  * Comprehensive deduplication utilities for Reddit posts and opportunities
@@ -369,4 +370,26 @@ export async function getDeduplicationStats(): Promise<{
     averagePostsPerSubreddit: Math.round(averagePostsPerSubreddit),
     duplicatePostsFound
   };
+}
+
+/**
+ * Store a Reddit post in the database
+ */
+export async function storeRedditPost(post: ProcessedRedditPost) {
+  return await prisma.redditPost.create({
+    data: {
+      redditId: post.redditId,
+      title: post.title,
+      content: post.content,
+      subreddit: post.subreddit,
+      author: post.author,
+      score: post.score,
+      upvotes: post.upvotes,
+      downvotes: post.downvotes,
+      numComments: post.numComments,
+      url: post.url,
+      permalink: post.permalink,
+      createdUtc: post.createdUtc,
+    }
+  });
 }
