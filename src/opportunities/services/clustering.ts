@@ -1,4 +1,4 @@
-import { prisma } from './prisma';
+import { prisma } from '@/shared';
 import { google } from '@ai-sdk/google';
 import { embed } from 'ai';
 import { clusteringEngine } from './semantic-clustering';

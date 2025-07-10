@@ -2,7 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { AICostTracker, AIUsageMetrics, AIAnalysisSessionData, AIPostAnalysisData } from './ai-cost-tracking';
+import { AICostTracker, AIUsageMetrics, AIAnalysisSessionData, AIPostAnalysisData } from './cost-tracking';
 
 /**
  * AI API wrapper with automatic cost tracking

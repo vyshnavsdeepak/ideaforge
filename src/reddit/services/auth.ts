@@ -1,4 +1,4 @@
-import { RedditAPIError } from './reddit';
+import { RedditAPIError } from './reddit-client';
 
 interface RedditOAuthConfig {
   clientId: string;

@@ -2,7 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { analyzeSinglePostWithCostTracking } from './ai-with-cost-tracking';
-import { AIAnalysisSessionData } from './ai-cost-tracking';
+import { AIAnalysisSessionData } from './cost-tracking';
 
 export interface Delta4Score {
   speed: number;

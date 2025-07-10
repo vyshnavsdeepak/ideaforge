@@ -1,18 +1,9 @@
-import { inngest } from "../lib/inngest";
 import { NonRetriableError } from "inngest";
-import { createRedditClient, RedditAPIError } from "../lib/reddit";
-import { Delta4Analyzer } from "../lib/ai";
-import { prisma } from "../lib/prisma";
-import { getActiveSubreddits } from "../lib/subreddit-config";
+import { createRedditClient, RedditAPIError, getActiveSubreddits, redditUserScraper } from "@/reddit";
+import { Delta4Analyzer, batchAnalyzeOpportunities, BatchAnalysisRequest, processBatchResults } from "@/ai";
+import { clusteringEngine } from "@/opportunities";
+import { prisma, inngest, checkRedditPostDuplication, checkOpportunityDuplication, updateRedditPost } from "@/shared";
 import { Prisma } from "@prisma/client";
-import { 
-  checkRedditPostDuplication, 
-  checkOpportunityDuplication, 
-  updateRedditPost 
-} from "../lib/deduplication";
-import { clusteringEngine } from "../lib/semantic-clustering";
-import { batchAnalyzeOpportunities, BatchAnalysisRequest, processBatchResults } from "../lib/batch-ai";
-import { redditUserScraper } from "../lib/reddit-user-scraper";
 
 export const scrapeSubreddit = inngest.createFunction(
   { 

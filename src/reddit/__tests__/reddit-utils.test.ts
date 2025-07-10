@@ -4,7 +4,7 @@ import {
   isValidRedditPermalink,
   extractSubredditFromPermalink,
   extractPostIdFromPermalink,
-} from '../reddit-utils'
+} from '../utils/reddit-utils'
 
 describe('Reddit URL Utilities', () => {
   describe('formatRedditUrl', () => {

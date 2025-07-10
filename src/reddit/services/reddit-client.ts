@@ -409,7 +409,7 @@ export class RedditClient {
 }
 
 // Import auth client
-import { RedditAuthClient, createRedditAuthClient } from './reddit-auth';
+import { RedditAuthClient, createRedditAuthClient } from './auth';
 
 /**
  * Authenticated Reddit Client that uses OAuth

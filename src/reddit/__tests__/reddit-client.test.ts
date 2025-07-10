@@ -1,4 +1,4 @@
-import { RedditClient } from '../reddit'
+import { RedditClient } from '../services/reddit-client'
 
 // Mock fetch globally
 const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>

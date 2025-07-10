@@ -1,7 +1,7 @@
-import { prisma } from '../prisma';
+import { prisma } from '../services/prisma';
 
 // Mock the prisma module
-jest.mock('../prisma', () => ({
+jest.mock('../services/prisma', () => ({
   prisma: {
     redditPost: {
       create: jest.fn(),

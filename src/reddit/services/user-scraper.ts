@@ -1,4 +1,4 @@
-import { createRedditClient } from './reddit';
+import { createRedditClient } from './reddit-client';
 
 export interface RedditUserProfile {
   id: string;

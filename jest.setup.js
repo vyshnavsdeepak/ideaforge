@@ -106,7 +106,7 @@ jest.mock('next-auth/next', () => ({
 }))
 
 // Mock Prisma
-jest.mock('./src/lib/prisma', () => ({
+jest.mock('./src/shared/services/prisma', () => ({
   prisma: {
     redditPost: {
       findMany: jest.fn(),
@@ -147,7 +147,7 @@ const mockFn = () => ({
 })
 
 // Override the prisma mock to include jest mock functions
-jest.doMock('./src/lib/prisma', () => ({
+jest.doMock('./src/shared/services/prisma', () => ({
   prisma: {
     redditPost: {
       findMany: Object.assign(jest.fn(), mockFn()),
@@ -173,7 +173,7 @@ jest.doMock('./src/lib/prisma', () => ({
 }))
 
 // Mock Inngest
-jest.mock('./src/lib/inngest', () => ({
+jest.mock('./src/shared/services/inngest', () => ({
   inngest: {
     send: jest.fn(),
     createFunction: jest.fn(),

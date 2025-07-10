@@ -1,6 +1,6 @@
-import { inngest } from "../lib/inngest";
-import { prisma } from "../lib/prisma";
-import { getActiveSubreddits } from "../lib/subreddit-config";
+import { inngest } from "@/shared";
+import { prisma } from "@/shared";
+import { getActiveSubreddits } from "@/reddit";
 
 /**
  * Scheduled Reddit scraping jobs based on optimal timing:

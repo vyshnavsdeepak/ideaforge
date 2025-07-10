@@ -4,11 +4,11 @@ import {
   updateRedditPost,
   cleanupDuplicatePosts,
   getDeduplicationStats,
-} from '../deduplication'
-import { prisma } from '../prisma'
+} from '../services/deduplication'
+import { prisma } from '../services/prisma'
 
 // Mock the prisma module
-jest.mock('../prisma')
+jest.mock('../services/prisma')
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockPrisma = prisma as unknown as any

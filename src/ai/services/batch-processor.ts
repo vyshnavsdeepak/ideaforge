@@ -1,9 +1,9 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { opportunitySchema, AIAnalysisResponse, Delta4Score } from './ai';
+import { opportunitySchema, AIAnalysisResponse, Delta4Score } from './analyzer';
 import { AIWithCostTracking } from './ai-with-cost-tracking';
-import { AIAnalysisSessionData } from './ai-cost-tracking';
+import { AIAnalysisSessionData } from './cost-tracking';
 import { randomUUID } from 'crypto';
 
 export interface BatchAnalysisRequest {
