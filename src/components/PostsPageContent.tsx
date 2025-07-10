@@ -19,7 +19,7 @@ import {
   XCircle,
   Loader2
 } from 'lucide-react';
-import { formatRedditUrl } from '../lib/reddit-utils';
+import { formatRedditUrl } from '@/reddit';
 
 interface RedditPost {
   id: string;

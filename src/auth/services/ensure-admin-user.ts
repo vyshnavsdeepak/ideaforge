@@ -1,4 +1,4 @@
-import { prisma } from './prisma';
+import { prisma } from '@/shared';
 
 /**
  * Ensures the admin user exists in the database

@@ -3,7 +3,7 @@ import { Badge } from './ui/Badge';
 import { Delta4Radar } from './Delta4Radar';
 import { BookmarkButton } from './Bookmarks/BookmarkButton';
 import { ExternalLink, TrendingUp, Users, Clock, Target, MessageSquare, ArrowBigUp, ArrowBigDown } from 'lucide-react';
-import { formatRedditUrl } from '../lib/reddit-utils';
+import { formatRedditUrl } from '@/reddit';
 
 interface OpportunityCardProps {
   opportunity: {

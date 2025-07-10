@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCurrency, formatNumber, formatDateTime, formatTokens } from '../../lib/format-utils';
+import { formatCurrency, formatNumber, formatDateTime, formatTokens } from '@/shared';
 
 interface PostAnalysis {
   id: string;

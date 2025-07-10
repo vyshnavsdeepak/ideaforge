@@ -5,7 +5,7 @@ import { TriggerScrapingButton } from '../../components/TriggerScrapingButton';
 import { FixUrlsButton } from '../../components/FixUrlsButton';
 import { HistoricalRecoveryButton } from '../../components/HistoricalRecoveryButton';
 import { TriggerClusteringButton } from '../../components/TriggerClusteringButton';
-import { prisma } from '../../lib/prisma';
+import { prisma } from '@/shared';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {

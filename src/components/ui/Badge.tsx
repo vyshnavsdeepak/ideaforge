@@ -1,4 +1,4 @@
-import { cn } from '../../lib/utils';
+import { cn } from '@/shared';
 
 interface BadgeProps {
   variant?: 'default' | 'success' | 'warning' | 'error' | 'outline';

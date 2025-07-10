@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { formatCurrency } from '../../lib/format-utils';
+import { formatCurrency } from '@/shared';
 
 interface CostAlert {
   id: string;

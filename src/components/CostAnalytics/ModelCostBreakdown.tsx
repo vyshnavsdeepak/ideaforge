@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCurrency, formatNumber, formatPercentage } from '../../lib/format-utils';
+import { formatCurrency, formatNumber, formatPercentage } from '@/shared';
 
 interface ModelUsage {
   model: string;

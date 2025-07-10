@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCurrency, formatNumber, formatDateTime, formatDuration } from '../../lib/format-utils';
+import { formatCurrency, formatNumber, formatDateTime, formatDuration } from '@/shared';
 
 interface Session {
   id: string;

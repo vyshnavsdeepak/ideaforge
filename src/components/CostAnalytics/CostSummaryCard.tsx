@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCurrency, formatNumber } from '../../lib/format-utils';
+import { formatCurrency, formatNumber } from '@/shared';
 
 interface CostSummaryData {
   totalCost: number;

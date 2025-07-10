@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '@/shared';
 import { Badge } from '../../../components/ui/Badge';
 import { Delta4Radar } from '../../../components/Delta4Radar';
 import { ExternalLink, Clock, MessageSquare, ArrowBigUp, ArrowLeft } from 'lucide-react';
-import { formatRedditUrl } from '../../../lib/reddit-utils';
+import { formatRedditUrl } from '@/reddit';
 
 interface OpportunityPageProps {
   params: Promise<{

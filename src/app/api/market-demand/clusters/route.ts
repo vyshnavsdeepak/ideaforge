@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clusteringEngine } from '@/lib/semantic-clustering';
+import { clusteringEngine } from '@/opportunities';
 import { z } from 'zod';
 
 const querySchema = z.object({

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { formatCurrency, formatDate } from '../../lib/format-utils';
+import { formatCurrency, formatDate } from '@/shared';
 
 interface DailyUsage {
   date: string;

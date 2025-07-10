@@ -1,5 +1,5 @@
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { prisma } from './prisma';
+import { prisma } from '@/shared';
 
 export const authOptions = {
   providers: [

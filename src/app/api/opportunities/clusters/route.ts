@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { opportunityClusteringEngine } from '@/lib/opportunity-clustering';
+import { opportunityClusteringEngine } from '@/opportunities';
 import { getServerSession } from 'next-auth/next';
 import { z } from 'zod';
 
