@@ -237,44 +237,13 @@ export const scrapeSubreddit = inngest.createFunction(
       };
     });
 
-    // Trigger immediate AI processing for stored posts
-    const aiProcessingResult = storedPosts.newPostsCount > 0 ? await step.run("trigger-immediate-ai-processing", async () => {
-        console.log(`[SCRAPE] Triggering immediate AI processing for ${storedPosts.newPostsCount} new posts`);
-        
-        const batchPosts = storedPosts.newPosts.map(post => ({
-          postId: post.id,
-          postTitle: post.title,
-          postContent: post.content || '',
-          subreddit: post.subreddit,
-          author: post.author,
-          score: post.score,
-          numComments: post.numComments,
-        }));
-        
-        await inngest.send({
-          name: "ai/batch-analyze.opportunities",
-          data: {
-            subreddit,
-            posts: batchPosts,
-            triggeredBy: "immediate-scrape-processing",
-            batchInfo: {
-              batchNumber: 1,
-              totalBatches: 1,
-              postsInBatch: storedPosts.newPostsCount,
-              totalPosts: storedPosts.newPostsCount,
-              isImmediateProcessing: true,
-              timestamp: new Date().toISOString(),
-            }
-          }
-        });
-        
-        console.log(`[SCRAPE] AI processing event sent for ${storedPosts.newPostsCount} posts from r/${subreddit}`);
-        return { 
-          aiTriggered: true,
-          postsQueued: storedPosts.newPostsCount,
-          eventSent: true
-        };
-      }) : {
+    // Queue posts for later batch processing - no immediate AI processing
+    const aiProcessingResult = storedPosts.newPostsCount > 0 ? {
+        aiTriggered: false,
+        postsQueued: storedPosts.newPostsCount,
+        reason: `${storedPosts.newPostsCount} posts queued for batch processing`,
+        queuedForBatchProcessing: true
+      } : {
         aiTriggered: false,
         postsQueued: 0,
         reason: 'No new posts to process'

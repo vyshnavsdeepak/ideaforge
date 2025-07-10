@@ -183,14 +183,79 @@ export const devModeScraper = inngest.createFunction(
   }
 );
 
-// Batch AI processor (runs every 5 minutes to process unprocessed posts)
+// Intelligent batch AI processor with threshold-based processing
 export const batchAIProcessor = inngest.createFunction(
   { id: "batch-ai-processor" },
-  { cron: "*/5 * * * *" }, // Every 5 minutes
+  { cron: "*/2 * * * *" }, // Every 2 minutes for more responsive monitoring
   async ({ step }) => {
-    console.log('[BATCH_AI_PROCESSOR] Starting batch AI processing for unprocessed posts');
+    console.log('[BATCH_AI_PROCESSOR] Starting intelligent batch AI processing check');
     
-    // Find all unprocessed posts
+    // Check current system state and determine if we should process
+    const systemState = await step.run("assess-system-state", async () => {
+      const unprocessedCount = await prisma.redditPost.count({
+        where: {
+          processedAt: null,
+          processingError: null,
+        }
+      });
+      
+      // Check oldest unprocessed post to determine urgency
+      const oldestPost = await prisma.redditPost.findFirst({
+        where: {
+          processedAt: null,
+          processingError: null,
+        },
+        orderBy: {
+          createdAt: 'asc'
+        },
+        select: {
+          createdAt: true
+        }
+      });
+      
+      const currentHour = new Date().getHours();
+      const isPeakHours = currentHour >= 9 && currentHour <= 13; // 9 AM - 1 PM EST
+      
+      // Calculate wait time for oldest post
+      const waitTimeMinutes = oldestPost 
+        ? Math.floor((Date.now() - oldestPost.createdAt.getTime()) / (1000 * 60))
+        : 0;
+      
+      return {
+        unprocessedCount,
+        oldestWaitTimeMinutes: waitTimeMinutes,
+        isPeakHours,
+        currentHour
+      };
+    });
+    
+    // Define intelligent thresholds
+    const THRESHOLDS = {
+      MIN_POSTS_TO_PROCESS: 5,           // Don't process unless at least 5 posts
+      PEAK_HOURS_THRESHOLD: 15,          // Process when 15+ posts during peak hours
+      NORMAL_HOURS_THRESHOLD: 25,        // Process when 25+ posts during normal hours
+      MAX_WAIT_TIME_MINUTES: 30,         // Force process after 30 minutes regardless
+      HIGH_VOLUME_THRESHOLD: 50,         // Immediate processing for high volume
+    };
+    
+    const shouldProcess = 
+      systemState.unprocessedCount >= THRESHOLDS.HIGH_VOLUME_THRESHOLD || // High volume
+      systemState.oldestWaitTimeMinutes >= THRESHOLDS.MAX_WAIT_TIME_MINUTES || // Too long wait
+      (systemState.isPeakHours && systemState.unprocessedCount >= THRESHOLDS.PEAK_HOURS_THRESHOLD) || // Peak hours threshold
+      (!systemState.isPeakHours && systemState.unprocessedCount >= THRESHOLDS.NORMAL_HOURS_THRESHOLD); // Normal hours threshold
+    
+    console.log(`[BATCH_AI_PROCESSOR] System state: ${systemState.unprocessedCount} posts, oldest wait: ${systemState.oldestWaitTimeMinutes}min, peak hours: ${systemState.isPeakHours}, should process: ${shouldProcess}`);
+    
+    if (!shouldProcess) {
+      return { 
+        processed: 0, 
+        skipped: true,
+        reason: `Waiting for threshold - ${systemState.unprocessedCount} posts (need ${systemState.isPeakHours ? THRESHOLDS.PEAK_HOURS_THRESHOLD : THRESHOLDS.NORMAL_HOURS_THRESHOLD}+)`,
+        systemState
+      };
+    }
+    
+    // Find unprocessed posts for processing
     const unprocessedPosts = await step.run("find-unprocessed-posts", async () => {
       const posts = await prisma.redditPost.findMany({
         where: {
@@ -200,20 +265,23 @@ export const batchAIProcessor = inngest.createFunction(
         orderBy: {
           createdAt: 'desc'
         },
-        take: 100, // Process up to 100 posts at a time
+        take: Math.min(systemState.unprocessedCount, 150), // Process available posts up to 150
       });
       
-      console.log(`[BATCH_AI_PROCESSOR] Found ${posts.length} unprocessed posts`);
+      console.log(`[BATCH_AI_PROCESSOR] Retrieved ${posts.length} unprocessed posts for processing`);
       return posts;
     });
     
-    if (unprocessedPosts.length === 0) {
-      console.log('[BATCH_AI_PROCESSOR] No unprocessed posts found');
-      return { processed: 0, message: 'No unprocessed posts found' };
-    }
+    // Process posts in intelligent batches based on volume and time
+    const determineBatchSize = (postCount: number, isPeakHours: boolean) => {
+      if (postCount >= 100) return 40;      // Large batches for high volume
+      if (postCount >= 50) return 30;       // Medium-large batches
+      if (isPeakHours) return 25;           // Faster processing during peak hours
+      return 20;                            // Standard batch size
+    };
     
-    // Process posts in efficient batches regardless of subreddit
-    const batchSize = 25; // Process 25 posts per batch
+    const batchSize = determineBatchSize(unprocessedPosts.length, systemState.isPeakHours);
+    console.log(`[BATCH_AI_PROCESSOR] Using intelligent batch size: ${batchSize} for ${unprocessedPosts.length} posts`);
     const results = await step.run("process-efficient-batches", async () => {
       const batchResults = [];
       
