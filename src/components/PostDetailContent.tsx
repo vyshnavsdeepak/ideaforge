@@ -17,7 +17,8 @@ import {
   XCircle,
   Loader2
 } from 'lucide-react';
-import { formatRedditUrl } from '../lib/reddit-utils';
+import { formatRedditUrl } from '@/reddit';
+import { PostComments } from './PostComments';
 
 interface PostDetailContentProps {
   post: {
@@ -483,6 +484,12 @@ export function PostDetailContent({ post: initialPost }: PostDetailContentProps)
                 </div>
               )}
             </div>
+
+            {/* Comments Section */}
+            <PostComments 
+              postId={post.id}
+              initialCommentsCount={post.numComments}
+            />
           </div>
 
           {/* Right Column - Metadata & Actions */}
