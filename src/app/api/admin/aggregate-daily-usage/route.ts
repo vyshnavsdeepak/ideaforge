@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { aggregateDailyUsage } from '../../../../lib/ai-cost-tracking';
+import { aggregateDailyUsage } from '@/ai';
 
 export async function POST(request: Request) {
   try {
