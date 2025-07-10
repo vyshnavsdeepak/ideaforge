@@ -1633,7 +1633,8 @@ export const analyzeRedditComments = inngest.createFunction(
       let stored = 0;
       for (const result of analysisResults.opportunities) {
         try {
-          const opp = result.opportunity;
+          const typedResult = result as { opportunity: unknown; confidence: number };
+          const opp = typedResult.opportunity;
           // Create the opportunity
           const opportunity = await prisma.opportunity.create({
             data: {
@@ -1706,7 +1707,7 @@ export const analyzeRedditComments = inngest.createFunction(
                 create: {
                   redditPostId: postId,
                   sourceType: 'comment',
-                  confidence: result.confidence,
+                  confidence: typedResult.confidence,
                 }
               }
             }
@@ -1742,11 +1743,11 @@ export const analyzeRedditComments = inngest.createFunction(
         commentsAnalyzed: analysisResults.totalAnalyzed,
         opportunitiesFound: analysisResults.opportunities.length,
         opportunitiesStored: storageResults.stored,
-        summary: analysisResults.opportunities.map(o => ({
-          title: o.opportunity.title,
-          score: o.opportunity.overallScore,
-          viable: o.opportunity.viabilityThreshold,
-          commentScore: o.commentScore,
+        summary: analysisResults.opportunities.map((o: unknown) => ({
+          title: o.opportunity?.title || 'Unknown',
+          score: o.opportunity?.overallScore || 0,
+          viable: o.opportunity?.viabilityThreshold || 0,
+          commentScore: o.commentScore || 0,
         })),
       };
 
