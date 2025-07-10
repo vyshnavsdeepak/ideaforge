@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { prisma } from '../../../../lib/prisma';
-import { aggregateDailyUsage, checkCostThresholds } from '../../../../lib/ai-cost-tracking';
+import { prisma } from '@/shared';
+import { aggregateDailyUsage, checkCostThresholds } from '@/ai';
 
 export async function GET(request: Request) {
   try {

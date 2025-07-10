@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { prisma } from '../../../../../lib/prisma';
+import { prisma } from '@/shared';
 import { z } from 'zod';
-import { authOptions } from '../../../../../lib/auth-options';
-import { ensureAdminUser } from '../../../../../lib/ensure-admin-user';
+import { authOptions } from '@/auth';
+import { ensureAdminUser } from '@/auth';
 
 const updateCollectionSchema = z.object({
   name: z.string().min(1).max(50).optional(),

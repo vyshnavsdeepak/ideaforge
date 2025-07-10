@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { prisma } from '../../../../lib/prisma';
-import { authOptions } from '../../../../lib/auth-options';
-import { ensureAdminUser } from '../../../../lib/ensure-admin-user';
+import { prisma } from '@/shared';
+import { authOptions } from '@/auth';
+import { ensureAdminUser } from '@/auth';
 
 // Check if an opportunity is bookmarked and get bookmark status
 export async function GET(request: NextRequest) {

@@ -1,10 +1,10 @@
 import { GET, PUT, DELETE } from '../route';
-import { prisma } from '../../../../../lib/prisma';
+import { prisma } from '@/shared';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 
 // Mock the prisma module
-jest.mock('../../../../../lib/prisma', () => ({
+jest.mock('@/shared', () => ({
   prisma: {
     bookmarkCollection: {
       findUnique: jest.fn(),

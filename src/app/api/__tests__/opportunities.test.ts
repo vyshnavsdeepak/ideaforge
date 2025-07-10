@@ -1,9 +1,9 @@
 import { GET } from '../opportunities/route';
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '@/shared';
 import { NextRequest } from 'next/server';
 
 // Mock the prisma module for API tests
-jest.mock('../../../lib/prisma', () => ({
+jest.mock('@/shared', () => ({
   prisma: {
     opportunity: {
       count: jest.fn(),

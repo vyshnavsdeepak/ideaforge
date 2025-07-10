@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { inngest } from '../../../../lib/inngest';
+import { inngest } from '@/shared';
 
 export async function POST(request: Request) {
   try {
@@ -60,7 +60,7 @@ export async function GET() {
     }
 
     // Get count of unprocessed posts
-    const { prisma } = await import('../../../../lib/prisma');
+    const { prisma } = await import('@/shared');
     
     const unprocessedCount = await prisma.redditPost.count({
       where: {

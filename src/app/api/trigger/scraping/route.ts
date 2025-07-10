@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth/next';
 import { NextResponse } from 'next/server';
-import { inngest } from '../../../../lib/inngest';
-import { getActiveSubredditNames } from '../../../../lib/subreddit-config';
+import { inngest } from '@/shared';
+import { getActiveSubredditNames } from '@/reddit';
 
 export async function POST() {
   try {

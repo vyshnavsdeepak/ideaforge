@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { seedDefaultSubreddits } from '../../../../lib/subreddit-config';
+import { seedDefaultSubreddits } from '@/reddit';
 
 export async function POST() {
   try {

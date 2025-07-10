@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { inngest } from '../../../lib/inngest';
+import { inngest } from '@/shared';
 
 export async function POST(request: NextRequest) {
   try {
