@@ -1,5 +1,5 @@
 import { serve } from "inngest/next";
-import { inngest } from "../../../lib/inngest";
+import { inngest } from "@/shared";
 import { allFunctions } from "../../../inngest";
 
 // Serve Inngest functions with proper configuration for Vercel

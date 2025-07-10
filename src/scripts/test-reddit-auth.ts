@@ -5,8 +5,7 @@
  * Run with: npx tsx src/scripts/test-reddit-auth.ts
  */
 
-import { createRedditAuthClient } from '../lib/reddit-auth';
-import { createRedditClient } from '../lib/reddit';
+import { createRedditAuthClient, createRedditClient } from '@/reddit';
 
 async function testRedditAuth() {
   console.log('🔧 Testing Reddit OAuth Authentication\n');
