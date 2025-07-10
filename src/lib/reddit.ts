@@ -148,6 +148,11 @@ export class RedditClient {
     this.tokenExpiry = Date.now() + (tokenData.expires_in - 600) * 1000;
     
     console.log(`[REDDIT_AUTH] Got new access token, expires in ${tokenData.expires_in} seconds`);
+    
+    if (!this.accessToken) {
+      throw new Error('Failed to get access token from Reddit OAuth response');
+    }
+    
     return this.accessToken;
   }
 
