@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../../lib/prisma';
-import { formatRedditUrl } from '../../../../lib/reddit-utils';
+import { prisma } from '@/shared';
+import { formatRedditUrl } from '@/reddit';
 
 export async function POST() {
   try {
