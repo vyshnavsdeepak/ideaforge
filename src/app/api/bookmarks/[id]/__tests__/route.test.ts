@@ -7,8 +7,8 @@ import { ensureAdminUser } from '@/auth';
 // Mock the prisma module
 jest.mock('@/shared/services/prisma', () => ({
   prisma: {
-    bookmarkCollection: {
-      findUnique: jest.fn(),
+    opportunityBookmark: {
+      findFirst: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
@@ -27,8 +27,8 @@ jest.mock('@/auth', () => ({
 }));
 
 const mockPrisma = prisma as unknown as {
-  bookmarkCollection: {
-    findUnique: jest.MockedFunction<() => Promise<unknown | null>>;
+  opportunityBookmark: {
+    findFirst: jest.MockedFunction<() => Promise<unknown | null>>;
     update: jest.MockedFunction<() => Promise<unknown>>;
     delete: jest.MockedFunction<() => Promise<unknown>>;
   };
@@ -43,7 +43,7 @@ describe('/api/bookmarks/[id]', () => {
     
     // Mock ensureAdminUser to return a user by default
     mockEnsureAdminUser.mockResolvedValue({
-      id: 'test-user',
+      id: 'user123',
       email: 'test@example.com',
       name: 'Test User',
       createdAt: new Date(),
@@ -63,63 +63,101 @@ describe('/api/bookmarks/[id]', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    test('should return collection by ID', async () => {
+    test('should return bookmark by ID', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockCollection = {
-        id: 'coll1',
+      const mockBookmark = {
+        id: 'bookmark1',
         userId: 'user123',
-        name: 'Test Collection',
-        description: 'Test description',
-        color: '#3B82F6',
-        icon: '📁',
-        isPublic: false,
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
+        notes: 'Test notes',
+        rating: 4,
+        tags: ['test'],
+        position: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
-        bookmarks: [],
+        opportunity: {
+          id: 'opp1',
+          title: 'Test Opportunity',
+          description: 'Test description',
+          overallScore: 7.5,
+          viabilityThreshold: true,
+          businessType: 'AI-Powered',
+          industryVertical: 'Healthcare',
+          niche: 'Telemedicine',
+          createdAt: new Date(),
+        },
+        collection: {
+          id: 'coll1',
+          name: 'Test Collection',
+          color: '#3B82F6',
+          icon: '📁',
+        },
       };
 
-      mockPrisma.bookmarkCollection.findUnique.mockResolvedValue(mockCollection);
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(mockBookmark);
 
-      const request = new NextRequest('http://localhost:3000/api/bookmarks/coll1');
-      const response = await GET(request, { params: Promise.resolve({ id: 'coll1' }) });
+      const request = new NextRequest('http://localhost:3000/api/bookmarks/bookmark1');
+      const response = await GET(request, { params: Promise.resolve({ id: 'bookmark1' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.collection).toEqual(mockCollection);
-      expect(mockPrisma.bookmarkCollection.findUnique).toHaveBeenCalledWith({
-        where: { id: 'coll1', userId: 'user123' },
+      expect(data.bookmark).toMatchObject({
+        id: 'bookmark1',
+        userId: 'user123',
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
+        notes: 'Test notes',
+        rating: 4,
+        tags: ['test'],
+        position: 1,
+      });
+      expect(mockPrisma.opportunityBookmark.findFirst).toHaveBeenCalledWith({
+        where: { id: 'bookmark1', userId: 'user123' },
         include: {
-          bookmarks: {
-            include: {
-              opportunity: {
-                include: {
-                  redditPost: true,
-                },
-              },
+          opportunity: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              overallScore: true,
+              viabilityThreshold: true,
+              businessType: true,
+              industryVertical: true,
+              niche: true,
+              createdAt: true,
+            },
+          },
+          collection: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
             },
           },
         },
       });
     });
 
-    test('should return 404 if collection not found', async () => {
+    test('should return 404 if bookmark not found', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      mockPrisma.bookmarkCollection.findUnique.mockResolvedValue(null);
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/bookmarks/nonexistent');
       const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) });
 
       expect(response.status).toBe(404);
       const data = await response.json();
-      expect(data.error).toBe('Collection not found');
+      expect(data.error).toBe('Bookmark not found');
     });
   });
 
@@ -138,72 +176,126 @@ describe('/api/bookmarks/[id]', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    test('should update collection', async () => {
+    test('should update bookmark', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockUpdatedCollection = {
-        id: 'coll1',
+      const mockExistingBookmark = {
+        id: 'bookmark1',
         userId: 'user123',
-        name: 'Updated Collection',
-        description: 'Updated description',
-        color: '#10B981',
-        icon: '⭐',
-        isPublic: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
       };
 
-      mockPrisma.bookmarkCollection.update.mockResolvedValue(mockUpdatedCollection);
+      const mockUpdatedBookmark = {
+        id: 'bookmark1',
+        userId: 'user123',
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
+        notes: 'Updated notes',
+        rating: 5,
+        tags: ['updated', 'test'],
+        position: 2,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        opportunity: {
+          id: 'opp1',
+          title: 'Test Opportunity',
+          description: 'Test description',
+          overallScore: 7.5,
+          viabilityThreshold: true,
+          businessType: 'AI-Powered',
+          industryVertical: 'Healthcare',
+          niche: 'Telemedicine',
+          createdAt: new Date(),
+        },
+        collection: {
+          id: 'coll1',
+          name: 'Test Collection',
+          color: '#3B82F6',
+          icon: '📁',
+        },
+      };
 
-      const request = new NextRequest('http://localhost:3000/api/bookmarks/coll1', {
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(mockExistingBookmark);
+      mockPrisma.opportunityBookmark.update.mockResolvedValue(mockUpdatedBookmark);
+
+      const request = new NextRequest('http://localhost:3000/api/bookmarks/bookmark1', {
         method: 'PUT',
         body: JSON.stringify({
-          name: 'Updated Collection',
-          description: 'Updated description',
-          color: '#10B981',
-          icon: '⭐',
-          isPublic: true,
+          notes: 'Updated notes',
+          rating: 5,
+          tags: ['updated', 'test'],
+          position: 2,
         }),
       });
-      const response = await PUT(request, { params: Promise.resolve({ id: 'coll1' }) });
+      const response = await PUT(request, { params: Promise.resolve({ id: 'bookmark1' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.collection).toEqual(mockUpdatedCollection);
-      expect(mockPrisma.bookmarkCollection.update).toHaveBeenCalledWith({
-        where: { id: 'coll1', userId: 'user123' },
+      expect(data.bookmark).toMatchObject({
+        id: 'bookmark1',
+        userId: 'user123',
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
+        notes: 'Updated notes',
+        rating: 5,
+        tags: ['updated', 'test'],
+        position: 2,
+      });
+      expect(mockPrisma.opportunityBookmark.update).toHaveBeenCalledWith({
+        where: { id: 'bookmark1' },
         data: {
-          name: 'Updated Collection',
-          description: 'Updated description',
-          color: '#10B981',
-          icon: '⭐',
-          isPublic: true,
+          notes: 'Updated notes',
+          rating: 5,
+          tags: ['updated', 'test'],
+          position: 2,
+        },
+        include: {
+          opportunity: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              overallScore: true,
+              viabilityThreshold: true,
+              businessType: true,
+              industryVertical: true,
+              niche: true,
+              createdAt: true,
+            },
+          },
+          collection: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+            },
+          },
         },
       });
     });
 
-    test('should return 404 if collection not found', async () => {
+    test('should return 404 if bookmark not found', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const notFoundError = new Error('Record not found') as Error & { code: string };
-      notFoundError.code = 'P2025';
-      mockPrisma.bookmarkCollection.update.mockRejectedValue(notFoundError);
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/bookmarks/nonexistent', {
         method: 'PUT',
-        body: JSON.stringify({ name: 'Updated Collection' }),
+        body: JSON.stringify({ notes: 'Updated notes' }),
       });
       const response = await PUT(request, { params: Promise.resolve({ id: 'nonexistent' }) });
 
       expect(response.status).toBe(404);
       const data = await response.json();
-      expect(data.error).toBe('Collection not found');
+      expect(data.error).toBe('Bookmark not found');
     });
 
     test('should handle validation errors', async () => {
@@ -212,19 +304,19 @@ describe('/api/bookmarks/[id]', () => {
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const request = new NextRequest('http://localhost:3000/api/bookmarks/coll1', {
+      const request = new NextRequest('http://localhost:3000/api/bookmarks/bookmark1', {
         method: 'PUT',
         body: JSON.stringify({
-          // Empty name should fail validation
-          name: '',
-          description: 'Updated description',
+          // Invalid rating should fail validation
+          rating: 10,
+          notes: 'Updated notes',
         }),
       });
-      const response = await PUT(request, { params: Promise.resolve({ id: 'coll1' }) });
+      const response = await PUT(request, { params: Promise.resolve({ id: 'bookmark1' }) });
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data.error).toContain('Name cannot be empty');
+      expect(data.error).toBe('Invalid request data');
     });
   });
 
@@ -242,42 +334,42 @@ describe('/api/bookmarks/[id]', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    test('should delete collection', async () => {
+    test('should delete bookmark', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const mockDeletedCollection = {
-        id: 'coll1',
+      const mockExistingBookmark = {
+        id: 'bookmark1',
         userId: 'user123',
-        name: 'Test Collection',
+        opportunityId: 'opp1',
+        collectionId: 'coll1',
       };
 
-      mockPrisma.bookmarkCollection.delete.mockResolvedValue(mockDeletedCollection);
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(mockExistingBookmark);
+      mockPrisma.opportunityBookmark.delete.mockResolvedValue(mockExistingBookmark);
 
-      const request = new NextRequest('http://localhost:3000/api/bookmarks/coll1', {
+      const request = new NextRequest('http://localhost:3000/api/bookmarks/bookmark1', {
         method: 'DELETE',
       });
-      const response = await DELETE(request, { params: Promise.resolve({ id: 'coll1' }) });
+      const response = await DELETE(request, { params: Promise.resolve({ id: 'bookmark1' }) });
 
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.message).toBe('Collection deleted successfully');
-      expect(mockPrisma.bookmarkCollection.delete).toHaveBeenCalledWith({
-        where: { id: 'coll1', userId: 'user123' },
+      expect(data.message).toBe('Bookmark deleted successfully');
+      expect(mockPrisma.opportunityBookmark.delete).toHaveBeenCalledWith({
+        where: { id: 'bookmark1' },
       });
     });
 
-    test('should return 404 if collection not found', async () => {
+    test('should return 404 if bookmark not found', async () => {
       const mockSession = {
         user: { id: 'user123', name: 'Test User', email: 'test@example.com' },
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      const notFoundError = new Error('Record not found') as Error & { code: string };
-      notFoundError.code = 'P2025';
-      mockPrisma.bookmarkCollection.delete.mockRejectedValue(notFoundError);
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(null);
 
       const request = new NextRequest('http://localhost:3000/api/bookmarks/nonexistent', {
         method: 'DELETE',
@@ -286,7 +378,7 @@ describe('/api/bookmarks/[id]', () => {
 
       expect(response.status).toBe(404);
       const data = await response.json();
-      expect(data.error).toBe('Collection not found');
+      expect(data.error).toBe('Bookmark not found');
     });
 
     test('should handle database errors gracefully', async () => {
@@ -295,16 +387,22 @@ describe('/api/bookmarks/[id]', () => {
       };
       mockGetServerSession.mockResolvedValue(mockSession);
 
-      mockPrisma.bookmarkCollection.delete.mockRejectedValue(new Error('Database error'));
+      const mockExistingBookmark = {
+        id: 'bookmark1',
+        userId: 'user123',
+      };
+      
+      mockPrisma.opportunityBookmark.findFirst.mockResolvedValue(mockExistingBookmark);
+      mockPrisma.opportunityBookmark.delete.mockRejectedValue(new Error('Database error'));
 
-      const request = new NextRequest('http://localhost:3000/api/bookmarks/coll1', {
+      const request = new NextRequest('http://localhost:3000/api/bookmarks/bookmark1', {
         method: 'DELETE',
       });
-      const response = await DELETE(request, { params: Promise.resolve({ id: 'coll1' }) });
+      const response = await DELETE(request, { params: Promise.resolve({ id: 'bookmark1' }) });
 
       expect(response.status).toBe(500);
       const data = await response.json();
-      expect(data.error).toBe('Internal server error');
+      expect(data.error).toBe('Failed to delete bookmark');
     });
   });
 });
