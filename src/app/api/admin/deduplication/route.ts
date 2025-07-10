@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { 
   getDeduplicationStats, 
   cleanupDuplicatePosts 
-} from '../../../../lib/deduplication';
+} from '@/shared';
 
 export async function GET() {
   try {
