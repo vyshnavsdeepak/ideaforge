@@ -45,7 +45,7 @@ export class AIWithCostTracking {
     const requestId = randomUUID();
     const startTime = new Date();
     
-    let result: { object: T };
+    let result: { object: T; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } };
     let usage: AIUsageMetrics;
     let cost: { inputCost: number; outputCost: number; totalCost: number };
 
@@ -62,10 +62,9 @@ export class AIWithCostTracking {
 
       const endTime = new Date();
       
-      // TODO: Extract actual token usage from the response
-      // For now, we'll estimate based on prompt/completion length
-      const inputTokens = this.estimateTokens(prompt);
-      const outputTokens = this.estimateTokens(JSON.stringify(result.object));
+      // Extract actual token usage from the response if available
+      const inputTokens = result.usage?.promptTokens || this.estimateTokens(prompt);
+      const outputTokens = result.usage?.completionTokens || this.estimateTokens(JSON.stringify(result.object));
 
       // Calculate cost
       cost = this.costTracker.calculateCost(model, inputTokens, outputTokens, batchMode);
@@ -94,9 +93,10 @@ export class AIWithCostTracking {
     } catch (error) {
       const endTime = new Date();
       
-      // Estimate tokens even for failed requests
-      const inputTokens = this.estimateTokens(prompt);
-      const outputTokens = 0; // No output on error
+      // Use actual tokens if available, otherwise estimate
+      const errorWithUsage = error as { usage?: { promptTokens?: number; completionTokens?: number } };
+      const inputTokens = errorWithUsage?.usage?.promptTokens || this.estimateTokens(prompt);
+      const outputTokens = errorWithUsage?.usage?.completionTokens || 0; // No output on error
       
       cost = this.costTracker.calculateCost(model, inputTokens, outputTokens, batchMode);
 
