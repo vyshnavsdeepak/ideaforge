@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { prisma } from '@/shared/services/prisma';
 import { z } from 'zod';
+import { authOptions } from '@/auth';
 
 const searchSchema = z.object({
   search: z.string().optional(),
@@ -22,7 +23,7 @@ const searchSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     // Check authentication
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -96,8 +97,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Build order clause
-    const orderClause: Record<string, string> = {};
-    orderClause[sortBy] = sortOrder;
+    const orderClause = [
+      { [sortBy]: sortOrder },
+      { sourceCount: 'desc' }, // Default secondary sort
+    ];
 
     // Calculate pagination
     const skip = (page - 1) * limit;
@@ -175,6 +178,17 @@ export async function GET(request: NextRequest) {
         avgScore: avgScoreResult._avg.overallScore || 0,
       },
       filters: {
+        search,
+        subreddit,
+        businessType,
+        platform,
+        targetAudience,
+        industryVertical,
+        niche,
+        minScore,
+        viability,
+        sortBy,
+        sortOrder,
         subreddits: subreddits.map(s => s.subreddit),
         businessTypes: businessTypes.map(b => b.businessType!),
         platforms: platforms.map(p => p.platform!),

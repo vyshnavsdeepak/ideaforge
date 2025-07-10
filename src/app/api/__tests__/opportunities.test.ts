@@ -14,6 +14,8 @@ jest.mock('@/shared/services/prisma', () => ({
     opportunity: {
       count: jest.fn(),
       findMany: jest.fn(),
+      aggregate: jest.fn(),
+      groupBy: jest.fn(),
     },
   },
 }));
@@ -22,6 +24,8 @@ const mockPrisma = prisma as unknown as {
   opportunity: {
     count: jest.MockedFunction<() => Promise<number>>;
     findMany: jest.MockedFunction<() => Promise<unknown[]>>;
+    aggregate: jest.MockedFunction<() => Promise<unknown>>;
+    groupBy: jest.MockedFunction<() => Promise<unknown[]>>;
   };
 };
 
@@ -52,22 +56,33 @@ describe('/api/opportunities', () => {
           overallScore: 7.5,
           viabilityThreshold: true,
           createdAt: new Date(),
-          redditPost: {
-            title: 'Test Reddit Post',
-            author: 'test_author',
-            score: 100,
-            numComments: 25,
-            permalink: '/r/test/comments/123',
-          },
+          redditPosts: [{
+            id: 'source1',
+            sourceType: 'reddit_post',
+            confidence: 0.9,
+            redditPost: {
+              id: 'post1',
+              title: 'Test Reddit Post',
+              author: 'test_author',
+              score: 100,
+              numComments: 25,
+              permalink: '/r/test/comments/123',
+              subreddit: 'test',
+              createdUtc: new Date(),
+            },
+          }],
         },
       ];
 
       mockPrisma.opportunity.count.mockResolvedValue(1);
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 7.5 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest('http://localhost:3000/api/opportunities');
       const response = await GET(request);
       const data = await response.json();
+
 
       expect(response.status).toBe(200);
       expect(data.opportunities).toHaveLength(1);
@@ -88,18 +103,28 @@ describe('/api/opportunities', () => {
           overallScore: 8.0,
           viabilityThreshold: true,
           createdAt: new Date(),
-          redditPost: {
-            title: 'Healthcare AI Discussion',
-            author: 'healthcare_expert',
-            score: 150,
-            numComments: 45,
-            permalink: '/r/healthcare/comments/456',
-          },
+          redditPosts: [{
+            id: 'source2',
+            sourceType: 'reddit_post',
+            confidence: 0.85,
+            redditPost: {
+              id: 'post2',
+              title: 'Healthcare AI Discussion',
+              author: 'healthcare_expert',
+              score: 150,
+              numComments: 45,
+              permalink: '/r/healthcare/comments/456',
+              subreddit: 'healthcare',
+              createdUtc: new Date(),
+            },
+          }],
         },
       ];
 
       mockPrisma.opportunity.count.mockResolvedValue(1);
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 8.0 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest(
         'http://localhost:3000/api/opportunities?search=healthcare'
@@ -119,6 +144,8 @@ describe('/api/opportunities', () => {
               { title: { contains: 'healthcare', mode: 'insensitive' } },
               { description: { contains: 'healthcare', mode: 'insensitive' } },
               { proposedSolution: { contains: 'healthcare', mode: 'insensitive' } },
+              { businessType: { contains: 'healthcare', mode: 'insensitive' } },
+              { niche: { contains: 'healthcare', mode: 'insensitive' } },
             ],
           }),
         })
@@ -137,18 +164,28 @@ describe('/api/opportunities', () => {
           overallScore: 6.5,
           viabilityThreshold: true,
           createdAt: new Date(),
-          redditPost: {
-            title: 'Startup Discussion',
-            author: 'startup_founder',
-            score: 200,
-            numComments: 50,
-            permalink: '/r/startups/comments/789',
-          },
+          redditPosts: [{
+            id: 'source3',
+            sourceType: 'reddit_post',
+            confidence: 0.8,
+            redditPost: {
+              id: 'post3',
+              title: 'Startup Discussion',
+              author: 'startup_founder',
+              score: 200,
+              numComments: 50,
+              permalink: '/r/startups/comments/789',
+              subreddit: 'startups',
+              createdUtc: new Date(),
+            },
+          }],
         },
       ];
 
       mockPrisma.opportunity.count.mockResolvedValue(1);
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 6.5 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest(
         'http://localhost:3000/api/opportunities?subreddit=startups'
@@ -181,18 +218,28 @@ describe('/api/opportunities', () => {
           overallScore: 8.5,
           viabilityThreshold: true,
           createdAt: new Date(),
-          redditPost: {
-            title: 'High Quality Post',
-            author: 'quality_user',
-            score: 300,
-            numComments: 75,
-            permalink: '/r/quality/comments/999',
-          },
+          redditPosts: [{
+            id: 'source4',
+            sourceType: 'reddit_post',
+            confidence: 0.95,
+            redditPost: {
+              id: 'post4',
+              title: 'High Quality Post',
+              author: 'quality_user',
+              score: 300,
+              numComments: 75,
+              permalink: '/r/quality/comments/999',
+              subreddit: 'quality',
+              createdUtc: new Date(),
+            },
+          }],
         },
       ];
 
       mockPrisma.opportunity.count.mockResolvedValue(1);
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 8.5 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest(
         'http://localhost:3000/api/opportunities?minScore=7.0'
@@ -224,17 +271,27 @@ describe('/api/opportunities', () => {
         overallScore: 7.0,
         viabilityThreshold: true,
         createdAt: new Date(),
-        redditPost: {
-          title: `Reddit Post ${i + 1}`,
-          author: 'test_author',
-          score: 100,
-          numComments: 25,
-          permalink: `/r/test/comments/${i + 1}`,
-        },
+        redditPosts: [{
+          id: `source${i + 5}`,
+          sourceType: 'reddit_post',
+          confidence: 0.8,
+          redditPost: {
+            id: `post${i + 5}`,
+            title: `Reddit Post ${i + 1}`,
+            author: 'test_author',
+            score: 100,
+            numComments: 25,
+            permalink: `/r/test/comments/${i + 1}`,
+            subreddit: 'test',
+            createdUtc: new Date(),
+          },
+        }],
       }));
 
       mockPrisma.opportunity.count.mockResolvedValue(50); // Total 50 opportunities
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 7.0 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest(
         'http://localhost:3000/api/opportunities?page=2&limit=10'
@@ -270,27 +327,37 @@ describe('/api/opportunities', () => {
           overallScore: 9.0,
           viabilityThreshold: true,
           createdAt: new Date(),
-          redditPost: {
-            title: 'High Quality Post',
-            author: 'quality_user',
-            score: 300,
-            numComments: 75,
-            permalink: '/r/quality/comments/999',
-          },
+          redditPosts: [{
+            id: 'source15',
+            sourceType: 'reddit_post',
+            confidence: 0.9,
+            redditPost: {
+              id: 'post15',
+              title: 'High Quality Post',
+              author: 'quality_user',
+              score: 300,
+              numComments: 75,
+              permalink: '/r/quality/comments/999',
+              subreddit: 'quality',
+              createdUtc: new Date(),
+            },
+          }],
         },
       ];
 
       mockPrisma.opportunity.count.mockResolvedValue(1);
       mockPrisma.opportunity.findMany.mockResolvedValue(mockOpportunities);
+      mockPrisma.opportunity.aggregate.mockResolvedValue({ _avg: { overallScore: 9.0 } });
+      mockPrisma.opportunity.groupBy.mockResolvedValue([]);
 
       const request = new NextRequest(
-        'http://localhost:3000/api/opportunities?sortBy=score&sortOrder=desc'
+        'http://localhost:3000/api/opportunities?sortBy=overallScore&sortOrder=desc'
       );
       const response = await GET(request);
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.filters.sortBy).toBe('score');
+      expect(data.filters.sortBy).toBe('overallScore');
       expect(data.filters.sortOrder).toBe('desc');
       
       // Verify sorting parameters
