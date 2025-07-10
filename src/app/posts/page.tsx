@@ -4,7 +4,7 @@ import { PostsPageContent } from '../../components/PostsPageContent';
 import { Loader2 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Reddit Posts',
+  title: 'Posts',
   description: 'Browse and analyze Reddit posts for business opportunities',
 };
 

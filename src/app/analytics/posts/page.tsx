@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { PostAnalyticsContent } from './PostAnalyticsContent';
 
 export const metadata: Metadata = {
-  title: 'Post Analytics',
+  title: 'Posts | Analytics',
   description: 'Detailed cost breakdown for individual post analyses',
 };
 

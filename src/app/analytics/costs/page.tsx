@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { AICostAnalyticsContent } from './AICostAnalyticsContent';
 
 export const metadata: Metadata = {
-  title: 'AI Cost Analytics',
+  title: 'AI Costs | Analytics',
   description: 'Monitor and optimize your AI usage costs across all models and operations',
 };
 

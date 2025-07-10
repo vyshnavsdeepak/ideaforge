@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { OpportunityClustersContent } from './OpportunityClustersContent';
 
 export const metadata: Metadata = {
-  title: 'Opportunity Clusters',
+  title: 'Clusters | Opportunities',
   description: 'Discover similar opportunities and frequently requested ideas from Reddit communities',
 };
 

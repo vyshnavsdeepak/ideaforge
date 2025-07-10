@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { Metadata } from 'next';
 import { prisma } from '../../../lib/prisma';
 import { PostDetailContent } from '../../../components/PostDetailContent';
 
@@ -6,6 +7,29 @@ interface PostPageProps {
   params: Promise<{
     id: string;
   }>;
+}
+
+export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const resolvedParams = await params;
+  const post = await prisma.redditPost.findUnique({
+    where: { id: resolvedParams.id },
+    select: {
+      title: true,
+      content: true,
+      subreddit: true,
+    },
+  });
+
+  if (!post) {
+    return {
+      title: 'Post Not Found',
+    };
+  }
+
+  return {
+    title: `${post.title} | Posts`,
+    description: post.content ? post.content.substring(0, 155) + '...' : `Reddit post from r/${post.subreddit}`,
+  };
 }
 
 export default async function PostPage({ params }: PostPageProps) {

@@ -1,4 +1,10 @@
 import Link from 'next/link';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Home',
+  description: 'Discover validated AI business opportunities by analyzing Reddit discussions using Kunal Shah\'s Delta 4 theory',
+};
 
 export default function Home() {
   return (

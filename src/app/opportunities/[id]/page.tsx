@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { Metadata } from 'next';
 import { prisma } from '../../../lib/prisma';
 import { Badge } from '../../../components/ui/Badge';
 import { Delta4Radar } from '../../../components/Delta4Radar';
@@ -10,6 +11,28 @@ interface OpportunityPageProps {
   params: Promise<{
     id: string;
   }>;
+}
+
+export async function generateMetadata({ params }: OpportunityPageProps): Promise<Metadata> {
+  const resolvedParams = await params;
+  const opportunity = await prisma.opportunity.findUnique({
+    where: { id: resolvedParams.id },
+    select: {
+      title: true,
+      description: true,
+    },
+  });
+
+  if (!opportunity) {
+    return {
+      title: 'Opportunity Not Found',
+    };
+  }
+
+  return {
+    title: `${opportunity.title} | Opportunities`,
+    description: opportunity.description,
+  };
 }
 
 export default async function OpportunityPage({ params }: OpportunityPageProps) {
