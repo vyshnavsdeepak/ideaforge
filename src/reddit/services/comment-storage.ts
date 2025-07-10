@@ -1,4 +1,4 @@
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { createRedditClient } from './reddit-client';
 import type { RedditComment } from './reddit-client';
 import type { Prisma } from '@prisma/client';

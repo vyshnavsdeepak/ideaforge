@@ -1,5 +1,5 @@
 import { GET } from '../route';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 

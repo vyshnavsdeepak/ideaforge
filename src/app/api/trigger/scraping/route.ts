@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth/next';
 import { NextResponse } from 'next/server';
-import { inngest } from '@/shared';
+import { inngest } from '@/shared/services/inngest';
 import { getActiveSubredditNames } from '@/reddit';
 
 export async function POST() {

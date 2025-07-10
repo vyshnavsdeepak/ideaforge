@@ -1,4 +1,4 @@
-import { inngest } from '@/shared';
+import { inngest } from '@/shared/services/inngest';
 import { NextResponse } from 'next/server';
 
 export async function POST() {

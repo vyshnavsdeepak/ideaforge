@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Metadata } from 'next';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { Badge } from '../../../components/ui/Badge';
 import { Delta4Radar } from '../../../components/Delta4Radar';
 import { ExternalLink, Clock, MessageSquare, ArrowBigUp, ArrowLeft } from 'lucide-react';

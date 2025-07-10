@@ -1,5 +1,5 @@
-import { inngest } from "@/shared";
-import { prisma } from "@/shared";
+import { inngest } from "@/shared/services/inngest";
+import { prisma } from "@/shared/services/prisma";
 import { getActiveSubreddits } from "@/reddit";
 
 /**

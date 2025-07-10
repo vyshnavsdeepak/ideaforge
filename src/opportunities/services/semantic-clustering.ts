@@ -1,4 +1,4 @@
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { google } from '@ai-sdk/google';
 import { embed } from 'ai';
 import type { MarketDemandCluster } from '@prisma/client';

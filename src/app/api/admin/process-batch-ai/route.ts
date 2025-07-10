@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { inngest, prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
+import { inngest } from '@/shared/services/inngest';
 
 export async function POST() {
   try {

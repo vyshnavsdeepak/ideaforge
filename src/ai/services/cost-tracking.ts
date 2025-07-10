@@ -1,4 +1,4 @@
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { randomUUID } from 'crypto';
 
 // Gemini API Pricing Configuration (as of 2025)

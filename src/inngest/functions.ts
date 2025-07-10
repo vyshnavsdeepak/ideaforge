@@ -2,7 +2,9 @@ import { NonRetriableError } from "inngest";
 import { createRedditClient, RedditAPIError, getActiveSubreddits, redditUserScraper } from "@/reddit";
 import { Delta4Analyzer, batchAnalyzeOpportunities, BatchAnalysisRequest, processBatchResults } from "@/ai";
 import { clusteringEngine } from "@/opportunities";
-import { prisma, inngest, checkRedditPostDuplication, checkOpportunityDuplication, updateRedditPost } from "@/shared";
+import { prisma } from "@/shared/services/prisma";
+import { inngest } from "@/shared/services/inngest";
+import { checkRedditPostDuplication, checkOpportunityDuplication, updateRedditPost } from "@/shared/services/deduplication";
 import { Prisma } from "@prisma/client";
 
 export const scrapeSubreddit = inngest.createFunction(

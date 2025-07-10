@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 
 interface SubredditConfigParams {
   id: string;

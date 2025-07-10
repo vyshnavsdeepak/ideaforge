@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { PostDetailContent } from '../../../components/PostDetailContent';
 
 interface PostPageProps {

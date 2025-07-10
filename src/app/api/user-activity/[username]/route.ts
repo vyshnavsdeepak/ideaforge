@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 
 interface UserActivityParams {
   username: string;

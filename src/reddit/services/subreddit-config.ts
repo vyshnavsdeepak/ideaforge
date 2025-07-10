@@ -1,4 +1,4 @@
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 
 export interface SubredditConfig {
   id: string;

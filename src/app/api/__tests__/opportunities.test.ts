@@ -1,5 +1,5 @@
 import { GET } from '../opportunities/route';
-import { prisma } from '@/shared';
+import { prisma } from '@/shared/services/prisma';
 import { NextRequest } from 'next/server';
 
 // Mock the prisma module for API tests
