@@ -1,6 +1,7 @@
 import { prisma } from '@/shared';
 import { createRedditClient } from './reddit-client';
 import type { RedditComment } from './reddit-client';
+import type { Prisma } from '@prisma/client';
 
 export interface StoredComment {
   id: string;
@@ -95,7 +96,7 @@ export class CommentStorageService {
               isTopLevel,
               depth,
               permalink: comment.parent_id ? null : `/r/${post.subreddit}/comments/${post.redditId}/_/${comment.id}/`,
-              rawData: comment as Record<string, unknown>
+              rawData: comment as unknown as Prisma.InputJsonValue
             }
           });
           
