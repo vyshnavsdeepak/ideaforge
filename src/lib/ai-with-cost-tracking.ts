@@ -46,7 +46,7 @@ export class AIWithCostTracking {
     const startTime = new Date();
     
     let result: { object: T; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number } };
-    let usage: AIUsageMetrics;
+    let usageMetrics: AIUsageMetrics;
     let cost: { inputCost: number; outputCost: number; totalCost: number };
 
     try {
@@ -63,14 +63,27 @@ export class AIWithCostTracking {
       const endTime = new Date();
       
       // Extract actual token usage from the response if available
-      const inputTokens = result.usage?.promptTokens || this.estimateTokens(prompt);
-      const outputTokens = result.usage?.completionTokens || this.estimateTokens(JSON.stringify(result.object));
+      console.log(`[AI_TRACKED] Full result:`, JSON.stringify(result, null, 2));
+      
+      // The AI SDK returns usage data in different possible structures
+      const responseWithUsage = result as { 
+        object: T; 
+        usage?: { promptTokens?: number; completionTokens?: number; input_tokens?: number; output_tokens?: number };
+        response?: { usage?: { promptTokens?: number; completionTokens?: number; input_tokens?: number; output_tokens?: number } };
+        experimental_usage?: { promptTokens?: number; completionTokens?: number; input_tokens?: number; output_tokens?: number };
+      };
+      const usage = responseWithUsage.usage || responseWithUsage.response?.usage || responseWithUsage.experimental_usage;
+      console.log(`[AI_TRACKED] Usage object:`, usage);
+      
+      const inputTokens = usage?.promptTokens || usage?.input_tokens || this.estimateTokens(prompt);
+      const outputTokens = usage?.completionTokens || usage?.output_tokens || this.estimateTokens(JSON.stringify(result.object));
+      console.log(`[AI_TRACKED] Token counts - Input: ${inputTokens}, Output: ${outputTokens}`);
 
       // Calculate cost
       cost = this.costTracker.calculateCost(model, inputTokens, outputTokens, batchMode);
 
       // Create usage metrics
-      usage = {
+      usageMetrics = {
         requestId,
         model,
         operation,
@@ -85,22 +98,26 @@ export class AIWithCostTracking {
       };
 
       // Track the usage
-      await this.costTracker.trackUsage(usage);
+      await this.costTracker.trackUsage(usageMetrics);
 
       console.log(`[AI_TRACKED] ${operation} analysis completed: $${cost.totalCost.toFixed(6)} (${inputTokens} input, ${outputTokens} output tokens)`);
 
-      return { result, usage, cost };
+      return { result, usage: usageMetrics, cost };
     } catch (error) {
       const endTime = new Date();
       
       // Use actual tokens if available, otherwise estimate
-      const errorWithUsage = error as { usage?: { promptTokens?: number; completionTokens?: number } };
-      const inputTokens = errorWithUsage?.usage?.promptTokens || this.estimateTokens(prompt);
-      const outputTokens = errorWithUsage?.usage?.completionTokens || 0; // No output on error
+      const errorWithUsage = error as { 
+        usage?: { promptTokens?: number; completionTokens?: number; input_tokens?: number; output_tokens?: number };
+        response?: { usage?: { promptTokens?: number; completionTokens?: number; input_tokens?: number; output_tokens?: number } };
+      };
+      const usage = errorWithUsage?.usage || errorWithUsage?.response?.usage;
+      const inputTokens = usage?.promptTokens || usage?.input_tokens || this.estimateTokens(prompt);
+      const outputTokens = usage?.completionTokens || usage?.output_tokens || 0; // No output on error
       
       cost = this.costTracker.calculateCost(model, inputTokens, outputTokens, batchMode);
 
-      usage = {
+      usageMetrics = {
         requestId,
         model,
         operation,
@@ -117,7 +134,7 @@ export class AIWithCostTracking {
       };
 
       // Track the failed usage
-      await this.costTracker.trackUsage(usage);
+      await this.costTracker.trackUsage(usageMetrics);
 
       console.error(`[AI_TRACKED] ${operation} analysis failed: ${error}`);
       console.log(`[AI_TRACKED] Failed request cost: $${cost.totalCost.toFixed(6)}`);
@@ -175,9 +192,11 @@ export class AIWithCostTracking {
    * Estimate token count from text (rough approximation)
    */
   private estimateTokens(text: string): number {
-    // Rough estimation: 1 token ≈ 4 characters for English text
-    // This is a simplified approach - in production, you'd want to use tiktoken or similar
-    return Math.ceil(text.length / 4);
+    // More accurate estimation for Gemini: 1 token ≈ 3.5 characters for English text
+    // This accounts for the fact that Gemini tends to use more tokens per character
+    // Also add a minimum baseline for short texts
+    const estimated = Math.ceil(text.length / 3.5);
+    return Math.max(estimated, 10); // Minimum 10 tokens for any text
   }
 
   /**
