@@ -5,6 +5,69 @@ import { BookmarkButton } from './Bookmarks/BookmarkButton';
 import { ExternalLink, TrendingUp, Users, Clock, Target, MessageSquare, ArrowBigUp, ArrowBigDown } from 'lucide-react';
 import { formatRedditUrl } from '@/reddit';
 
+interface MakeshiftSolution {
+  description: string;
+  currentApproach: string;
+  painPoints: string[];
+  timeInvestment: string;
+  costEstimate: string;
+  skillsRequired: string[];
+  frustrationLevel: 'Low' | 'Medium' | 'High';
+  scalabilityIssues: string[];
+}
+
+interface SoftwareSolution {
+  description: string;
+  proposedApproach: string;
+  keyFeatures: string[];
+  automationLevel: 'Partial' | 'High' | 'Full';
+  userExperience: string;
+  integrationCapabilities: string[];
+  maintenanceRequirements: string;
+}
+
+interface DeltaComparison {
+  makeshiftDelta4: {
+    speed: number;
+    convenience: number;
+    trust: number;
+    price: number;
+    status: number;
+    predictability: number;
+    uiUx: number;
+    easeOfUse: number;
+    legalFriction: number;
+    emotionalComfort: number;
+  };
+  softwareDelta4: {
+    speed: number;
+    convenience: number;
+    trust: number;
+    price: number;
+    status: number;
+    predictability: number;
+    uiUx: number;
+    easeOfUse: number;
+    legalFriction: number;
+    emotionalComfort: number;
+  };
+  improvementDelta: {
+    speed: number;
+    convenience: number;
+    trust: number;
+    price: number;
+    status: number;
+    predictability: number;
+    uiUx: number;
+    easeOfUse: number;
+    legalFriction: number;
+    emotionalComfort: number;
+  };
+  totalDeltaScore: number;
+  biggestImprovements: string[];
+  reasonsForSoftware: string[];
+}
+
 interface OpportunityCardProps {
   opportunity: {
     id: string;
@@ -33,6 +96,9 @@ interface OpportunityCardProps {
     createdAt: Date;
     sourceCount?: number;
     niche?: string | null;
+    makeshiftSolution?: MakeshiftSolution | null;
+    softwareSolution?: SoftwareSolution | null;
+    deltaComparison?: DeltaComparison | null;
     redditPosts?: Array<{
       id: string;
       sourceType: string;
@@ -135,6 +201,121 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
               <p className="text-sm text-gray-600 dark:text-gray-300">
                 {opportunity.currentSolution}
               </p>
+            </div>
+          )}
+
+          {/* Makeshift vs Software Analysis */}
+          {opportunity.makeshiftSolution && opportunity.softwareSolution && opportunity.deltaComparison && (
+            <div className="space-y-4">
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-3">⚡ Makeshift vs Software Analysis</h4>
+                
+                {/* Delta Score Summary */}
+                <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-lg font-bold text-gray-900 dark:text-white">
+                        +{opportunity.deltaComparison.totalDeltaScore.toFixed(1)} Delta Score
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Software improvement over makeshift
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-600 dark:text-gray-300">
+                        Top improvements:
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {opportunity.deltaComparison.biggestImprovements.slice(0, 2).join(', ')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Two-column comparison */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Makeshift Solution */}
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-red-600 dark:text-red-400 font-semibold">🔨 Makeshift</span>
+                      <Badge variant="error" className="text-xs">
+                        {opportunity.makeshiftSolution.frustrationLevel} Frustration
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                      {opportunity.makeshiftSolution.description}
+                    </p>
+                    <div className="space-y-2">
+                      <div className="text-xs">
+                        <span className="font-medium">Time:</span> {opportunity.makeshiftSolution.timeInvestment}
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-medium">Cost:</span> {opportunity.makeshiftSolution.costEstimate}
+                      </div>
+                      {opportunity.makeshiftSolution.painPoints.length > 0 && (
+                        <div className="text-xs">
+                          <span className="font-medium">Pain Points:</span>
+                          <ul className="list-disc list-inside mt-1 text-gray-600 dark:text-gray-400">
+                            {opportunity.makeshiftSolution.painPoints.slice(0, 3).map((point, i) => (
+                              <li key={i}>{point}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Software Solution */}
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-green-600 dark:text-green-400 font-semibold">💻 Software</span>
+                      <Badge variant="success" className="text-xs">
+                        {opportunity.softwareSolution.automationLevel} Automation
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                      {opportunity.softwareSolution.description}
+                    </p>
+                    <div className="space-y-2">
+                      <div className="text-xs">
+                        <span className="font-medium">UX:</span> {opportunity.softwareSolution.userExperience}
+                      </div>
+                      {opportunity.softwareSolution.keyFeatures.length > 0 && (
+                        <div className="text-xs">
+                          <span className="font-medium">Key Features:</span>
+                          <ul className="list-disc list-inside mt-1 text-gray-600 dark:text-gray-400">
+                            {opportunity.softwareSolution.keyFeatures.slice(0, 3).map((feature, i) => (
+                              <li key={i}>{feature}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {opportunity.softwareSolution.integrationCapabilities.length > 0 && (
+                        <div className="text-xs">
+                          <span className="font-medium">Integrations:</span> {opportunity.softwareSolution.integrationCapabilities.slice(0, 2).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Delta Improvements */}
+                {opportunity.deltaComparison.reasonsForSoftware.length > 0 && (
+                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <h5 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                      Why Software Wins:
+                    </h5>
+                    <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                      {opportunity.deltaComparison.reasonsForSoftware.slice(0, 3).map((reason, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="text-blue-600 dark:text-blue-400 mt-1">•</span>
+                          <span>{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
