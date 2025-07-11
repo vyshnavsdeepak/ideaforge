@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
+import { api } from '@/trpc/client';
 import { CollectionManager, type Collection } from '../../components/Bookmarks/CollectionManager';
-import { BookmarkButton } from '../../components/Bookmarks/BookmarkButton';
+import { TRPCBookmarkButton } from '../../components/Bookmarks/TRPCBookmarkButton';
 import { Badge } from '../../components/ui/Badge';
 import { 
   Bookmark, 
@@ -41,42 +42,42 @@ interface BookmarkData {
 
 export function BookmarksPageContent() {
   const [selectedCollection, setSelectedCollection] = useState<BookmarkCollection | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'created' | 'score' | 'rating' | 'title'>('created');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const loadCollections = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/bookmarks/collections');
-      if (!response.ok) throw new Error('Failed to load collections');
-      
-      const data = await response.json();
-      
-      // Auto-select first collection if available
-      if (data.collections?.length > 0 && !selectedCollection) {
-        setSelectedCollection(data.collections[0]);
-      }
-    } catch (error) {
-      console.error('Error loading collections:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedCollection]);
+  // Use tRPC to fetch collections
+  const { data: collectionsData, isLoading } = api.bookmarks.getAllCollections.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
 
-  useEffect(() => {
-    loadCollections();
-  }, [loadCollections]);
+  const collections = useMemo(() => collectionsData?.collections || [], [collectionsData?.collections]);
+
+  // Auto-select first collection if available and none is selected
+  React.useEffect(() => {
+    if (collections.length > 0 && !selectedCollection) {
+      // Transform the tRPC response to match our component interface
+      const collection = collections[0];
+      const transformedCollection = {
+        ...collection,
+        color: collection.color || '#3B82F6', // Default blue color
+        icon: collection.icon || '📁', // Default folder icon
+        bookmarks: collection.bookmarks || [],
+      } as unknown as BookmarkCollection;
+      setSelectedCollection(transformedCollection);
+    }
+  }, [collections, selectedCollection]);
 
   const handleCollectionSelect = (collection: Collection) => {
-    // Ensure collection has bookmarks array before setting
-    const collectionWithBookmarks = {
+    // Transform the collection to match our component interface
+    const transformedCollection = {
       ...collection,
-      bookmarks: collection.bookmarks || []
-    } as BookmarkCollection;
-    setSelectedCollection(collectionWithBookmarks);
+      color: collection.color || '#3B82F6', // Default blue color
+      icon: collection.icon || '📁', // Default folder icon
+      bookmarks: collection.bookmarks || [],
+    } as unknown as BookmarkCollection;
+    setSelectedCollection(transformedCollection);
   };
 
   const filteredBookmarks = selectedCollection?.bookmarks.filter(bookmark => {
@@ -320,7 +321,7 @@ export function BookmarksPageContent() {
                                 </Badge>
                               </div>
                             </div>
-                            <BookmarkButton
+                            <TRPCBookmarkButton
                               opportunityId={bookmark.opportunity.id}
                               size="sm"
                               variant="minimal"

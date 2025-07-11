@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge } from './ui/Badge';
 import { Delta4Radar } from './Delta4Radar';
-import { BookmarkButton } from './Bookmarks/BookmarkButton';
+import { TRPCBookmarkButton } from './Bookmarks/TRPCBookmarkButton';
 import { ExternalLink, TrendingUp, Users, Clock, Target, MessageSquare, ArrowBigUp, ArrowBigDown } from 'lucide-react';
 import { formatRedditUrl } from '@/reddit';
 
@@ -174,7 +174,7 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
-            <BookmarkButton 
+            <TRPCBookmarkButton 
               opportunityId={opportunity.id} 
               size="sm"
               showText={false}
