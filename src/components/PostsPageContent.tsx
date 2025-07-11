@@ -4,10 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from './ui/Badge';
+import { Pagination } from './ui/Pagination';
 import { 
   Search, 
-  ChevronLeft, 
-  ChevronRight, 
   ExternalLink, 
   MessageSquare, 
   ArrowBigUp, 
@@ -572,35 +571,27 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
 
           {/* Pagination */}
           {data.pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
-                  disabled={!data.pagination.hasPrev}
-                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Previous
-                </button>
-                <button
-                  onClick={() => updateFilters({ page: filters.page + 1 })}
-                  disabled={!data.pagination.hasNext}
-                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Page {data.pagination.page} of {data.pagination.totalPages}
-                </span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  ({data.pagination.totalCount} total posts)
-                </span>
-              </div>
-            </div>
+            <Pagination
+              currentPage={filters.page}
+              totalPages={data.pagination.totalPages}
+              totalCount={data.pagination.totalCount}
+              itemsPerPage={filters.limit}
+              createPageUrl={(page) => {
+                const queryParams = new URLSearchParams();
+                const newFilters = { ...filters, page };
+                
+                // Add non-empty filters to query params
+                Object.entries(newFilters).forEach(([key, value]) => {
+                  if (value && value !== '' && !(key === 'page' && value === 1)) {
+                    queryParams.set(key, value.toString());
+                  }
+                });
+                
+                const queryString = queryParams.toString();
+                return `/posts${queryString ? '?' + queryString : ''}`;
+              }}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow p-6"
+            />
           )}
         </div>
       </div>

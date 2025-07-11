@@ -3,11 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { OpportunityCard } from './OpportunityCard';
+import { Pagination } from './ui/Pagination';
 import { 
   Search, 
   Filter, 
-  ChevronLeft, 
-  ChevronRight, 
   Sparkles,
   TrendingUp,
   X,
@@ -625,49 +624,28 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
 
             {/* Pagination */}
             {data.pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between mt-8">
-                <div className="text-sm text-gray-700 dark:text-gray-300">
-                  Showing {((filters.page - 1) * filters.limit) + 1} to {Math.min(filters.page * filters.limit, data.pagination.totalCount)} of {data.pagination.totalCount} opportunities
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateFilters({ page: filters.page - 1 })}
-                    disabled={filters.page === 1}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Previous
-                  </button>
-                  
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, data.pagination.totalPages) }, (_, i) => {
-                      const page = i + 1;
-                      const isActive = page === filters.page;
-                      return (
-                        <button
-                          key={page}
-                          onClick={() => updateFilters({ page })}
-                          className={`px-3 py-1 text-sm font-medium rounded-md ${
-                            isActive
-                              ? 'bg-purple-600 text-white'
-                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    onClick={() => updateFilters({ page: filters.page + 1 })}
-                    disabled={filters.page === data.pagination.totalPages}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+              <div className="mt-8">
+                <Pagination
+                  currentPage={filters.page}
+                  totalPages={data.pagination.totalPages}
+                  totalCount={data.pagination.totalCount}
+                  itemsPerPage={filters.limit}
+                  createPageUrl={(page) => {
+                    const queryParams = new URLSearchParams();
+                    const newFilters = { ...filters, page };
+                    
+                    // Add non-empty filters to query params
+                    Object.entries(newFilters).forEach(([key, value]) => {
+                      if (value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1) && !(key === 'minScore' && value === 0)) {
+                        queryParams.set(key, value.toString());
+                      }
+                    });
+                    
+                    const queryString = queryParams.toString();
+                    return `/opportunities${queryString ? '?' + queryString : ''}`;
+                  }}
+                  className="backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-6 shadow-xl border border-white/20 dark:border-gray-700/20"
+                />
               </div>
             )}
           </div>
