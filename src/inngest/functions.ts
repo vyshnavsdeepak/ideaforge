@@ -1149,9 +1149,9 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
                 validationTier: result.analysis.opportunity.marketValidation.validationTier,
                 
                 // Makeshift vs Software Solution Analysis
-                makeshiftSolution: result.analysis.opportunity.makeshiftSolution || null,
-                softwareSolution: result.analysis.opportunity.softwareSolution || null,
-                deltaComparison: result.analysis.opportunity.deltaComparison || null,
+                makeshiftSolution: (result.analysis.opportunity.makeshiftSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+                softwareSolution: (result.analysis.opportunity.softwareSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+                deltaComparison: (result.analysis.opportunity.deltaComparison as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
               }
             });
 
@@ -1703,9 +1703,9 @@ export const analyzeRedditComments = inngest.createFunction(
             niche: typedResult.opportunity.categories?.niche || 'general',
             
             // Makeshift vs Software Solution Analysis
-            makeshiftSolution: typedResult.opportunity.makeshiftSolution || null,
-            softwareSolution: typedResult.opportunity.softwareSolution || null,
-            deltaComparison: typedResult.opportunity.deltaComparison || null,
+            makeshiftSolution: (typedResult.opportunity.makeshiftSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+            softwareSolution: (typedResult.opportunity.softwareSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+            deltaComparison: (typedResult.opportunity.deltaComparison as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
           };
 
           // Store the opportunity
@@ -1782,6 +1782,135 @@ export const analyzeRedditComments = inngest.createFunction(
       console.error(`[ANALYZE_COMMENTS] Comment analysis failed for post ${postId}:`, error);
       throw error;
     }
+  }
+);
+
+export const backfillOpportunitySolutions = inngest.createFunction(
+  { 
+    id: "backfill-opportunity-solutions",
+    retries: 2,
+    rateLimit: {
+      limit: 1,
+      period: "1m"
+    }
+  },
+  { event: "ai/backfill-opportunity-solutions" },
+  async ({ event, step }) => {
+    console.log(`[BACKFILL_SOLUTIONS] Starting backfill for opportunities missing solution data`);
+    
+    const { batchSize = 10, skipExisting = true } = event.data || {};
+    
+    // Step 1: Find opportunities missing solution data
+    const opportunitiesToProcess = await step.run("find-opportunities-missing-solutions", async () => {
+      const whereClause = skipExisting 
+        ? {
+            OR: [
+              { makeshiftSolution: { equals: Prisma.JsonNull } },
+              { softwareSolution: { equals: Prisma.JsonNull } },
+              { deltaComparison: { equals: Prisma.JsonNull } }
+            ]
+          }
+        : {}; // Process all opportunities if skipExisting is false
+      
+      const opportunities = await prisma.opportunity.findMany({
+        where: whereClause,
+        include: {
+          redditPosts: {
+            include: {
+              redditPost: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: batchSize
+      });
+      
+      console.log(`[BACKFILL_SOLUTIONS] Found ${opportunities.length} opportunities to process`);
+      return opportunities;
+    });
+    
+    if (opportunitiesToProcess.length === 0) {
+      console.log(`[BACKFILL_SOLUTIONS] No opportunities need backfilling`);
+      return { processed: 0, updated: 0, errors: 0 };
+    }
+    
+    // Step 2: Process each opportunity
+    const results = await step.run("process-opportunities", async () => {
+      let processed = 0;
+      let updated = 0;
+      let errors = 0;
+      
+      for (const opportunity of opportunitiesToProcess) {
+        try {
+          // Get the original Reddit post for context
+          const originalPost = opportunity.redditPosts[0]?.redditPost;
+          if (!originalPost) {
+            console.log(`[BACKFILL_SOLUTIONS] No original post found for opportunity ${opportunity.id}`);
+            continue;
+          }
+          
+          console.log(`[BACKFILL_SOLUTIONS] Processing opportunity: ${opportunity.title}`);
+          
+          // Create AI analysis request
+          const analysisRequest = {
+            postTitle: originalPost.title,
+            postContent: originalPost.content || '',
+            subreddit: originalPost.subreddit,
+            author: originalPost.author,
+            score: originalPost.score,
+            numComments: originalPost.numComments,
+          };
+          
+          // Use the Delta4Analyzer to re-analyze
+          const analyzer = new Delta4Analyzer(process.env.GOOGLE_AI_API_KEY!);
+          const analysis = await analyzer.analyzeOpportunity(analysisRequest, {
+            trackCosts: true,
+            redditPostId: originalPost.id,
+            sessionData: {
+              sessionId: `backfill-${Date.now()}`,
+              sessionType: 'batch' as const,
+              triggeredBy: 'backfill-job',
+              subreddit: originalPost.subreddit,
+              postsRequested: opportunitiesToProcess.length,
+            }
+          });
+          
+          processed++;
+          
+          // Update the opportunity with the new solution data
+          if (analysis.opportunity && (
+            analysis.opportunity.makeshiftSolution || 
+            analysis.opportunity.softwareSolution || 
+            analysis.opportunity.deltaComparison
+          )) {
+            await prisma.opportunity.update({
+              where: { id: opportunity.id },
+              data: {
+                makeshiftSolution: (analysis.opportunity.makeshiftSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+                softwareSolution: (analysis.opportunity.softwareSolution as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+                deltaComparison: (analysis.opportunity.deltaComparison as unknown as Prisma.InputJsonValue) || Prisma.JsonNull,
+                // Also update the analysis date to track when this was backfilled
+                updatedAt: new Date()
+              }
+            });
+            
+            updated++;
+            console.log(`[BACKFILL_SOLUTIONS] Updated opportunity ${opportunity.id} with solution data`);
+          } else {
+            console.log(`[BACKFILL_SOLUTIONS] No solution data generated for opportunity ${opportunity.id}`);
+          }
+          
+        } catch (error) {
+          errors++;
+          console.error(`[BACKFILL_SOLUTIONS] Error processing opportunity ${opportunity.id}:`, error);
+        }
+      }
+      
+      return { processed, updated, errors };
+    });
+    
+    console.log(`[BACKFILL_SOLUTIONS] Backfill completed: ${results.processed} processed, ${results.updated} updated, ${results.errors} errors`);
+    return results;
   }
 );
 

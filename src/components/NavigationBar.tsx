@@ -20,6 +20,7 @@ const navigation: NavigationItem[] = [
   { name: 'User Activity', href: '/user-activity', icon: '👤', description: 'Deep Dive Analysis' },
   { name: 'Market Intelligence', href: '/market-intelligence', icon: '📈', description: 'Demand Trends' },
   { name: 'Jobs & Status', href: '/jobs', icon: '⚡', description: 'System Monitoring' },
+  { name: 'Admin Backfill', href: '/admin/backfill', icon: '🔧', description: 'Data Backfill Tools' },
   { name: 'Settings', href: '/settings', icon: '⚙️', description: 'Configuration' },
 ];
 
