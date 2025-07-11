@@ -72,7 +72,7 @@ describe('BookmarkButton', () => {
     render(<BookmarkButton opportunityId="test-opportunity" showText={true} />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveAttribute('title', 'Add bookmark');
+      expect(screen.getByTitle('Quick bookmark')).toBeInTheDocument();
     });
     
     expect(screen.getByText('Bookmark')).toBeInTheDocument();
@@ -102,12 +102,12 @@ describe('BookmarkButton', () => {
     const { rerender } = render(<BookmarkButton opportunityId="test-opportunity" size="sm" />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveClass('p-1');
+      expect(screen.getByTitle('Quick bookmark')).toHaveClass('p-1');
     });
 
     rerender(<BookmarkButton opportunityId="test-opportunity" size="lg" />);
     
-    expect(screen.getByRole('button')).toHaveClass('p-3');
+    expect(screen.getByTitle('Quick bookmark')).toHaveClass('p-3');
   });
 
   it('renders minimal variant correctly', async () => {
@@ -119,7 +119,7 @@ describe('BookmarkButton', () => {
     render(<BookmarkButton opportunityId="test-opportunity" variant="minimal" />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveAttribute('title', 'Add bookmark');
+      expect(screen.getByTitle('Quick bookmark')).toBeInTheDocument();
     });
     
     // Minimal variant should not show text
@@ -160,7 +160,7 @@ describe('BookmarkButton', () => {
     });
 
     // Click to bookmark
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByTitle('Quick bookmark'));
     
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/bookmarks/check', {
@@ -364,7 +364,7 @@ describe('BookmarkButton', () => {
       expect(screen.getByText('Bookmark')).toBeInTheDocument();
     });
 
-    const button = screen.getByRole('button');
+    const button = screen.getByTitle('Quick bookmark');
     
     // Click to bookmark
     fireEvent.click(button);
@@ -381,7 +381,7 @@ describe('BookmarkButton', () => {
     render(<BookmarkButton opportunityId="test-opportunity" showText={false} />);
     
     await waitFor(() => {
-      expect(screen.getByRole('button')).toHaveAttribute('title', 'Add bookmark');
+      expect(screen.getByTitle('Quick bookmark')).toBeInTheDocument();
     });
     
     expect(screen.queryByText('Bookmark')).not.toBeInTheDocument();
