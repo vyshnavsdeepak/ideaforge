@@ -1,6 +1,6 @@
 'use client';
 
-import { JobTriggerButton } from './JobTriggerButton';
+import { TRPCJobTriggerButton } from './TRPCJobTriggerButton';
 
 interface JobTriggersPanelProps {
   className?: string;
@@ -21,8 +21,8 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
       <div className="p-6">
         {/* Essential 3-Button Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <JobTriggerButton
-            endpoint="/api/trigger-mega-scraping"
+          <TRPCJobTriggerButton
+            action="scrapeAll"
             label="Scrape All Subreddits"
             icon="🚀"
             description="Force immediate scraping of all subreddits for fresh content"
@@ -30,8 +30,8 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
             requireAuth={true}
           />
           
-          <JobTriggerButton
-            endpoint="/api/admin/process-unprocessed-posts"
+          <TRPCJobTriggerButton
+            action="processUnprocessed"
             label="Process All Unprocessed"
             icon="🤖"
             description="Process any backlog of unprocessed posts with AI analysis"
@@ -40,14 +40,13 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
             payload={{ limit: 500 }}
           />
           
-          <JobTriggerButton
-            endpoint="/api/admin/system-health"
+          <TRPCJobTriggerButton
+            action="clearCache"
             label="System Health Check"
             icon="❤️"
             description="Verify system status, database health, and processing pipeline"
             variant="secondary"
             requireAuth={true}
-            method="GET"
           />
         </div>
 
@@ -57,8 +56,8 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
             ⚡ Quick Actions
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <JobTriggerButton
-              endpoint="/api/admin/reprocess-failed-posts"
+            <TRPCJobTriggerButton
+              action="processUnprocessed"
               label="Retry Failed Posts"
               icon="🔄"
               description="Retry posts that failed AI processing"
@@ -66,23 +65,23 @@ export function JobTriggersPanel({ className = '' }: JobTriggersPanelProps) {
               requireAuth={true}
             />
             
-            <JobTriggerButton
-              endpoint="/api/analytics/ai-costs"
+            <TRPCJobTriggerButton
+              action="clearCache"
               label="View AI Costs"
               icon="💰"
               description="Check current AI usage and spending"
               variant="secondary"
               requireAuth={true}
-              method="GET"
             />
             
-            <JobTriggerButton
-              endpoint="/api/trigger-scraping"
+            <TRPCJobTriggerButton
+              action="scrapeAll"
               label="Test Scrape"
               icon="🧪"
               description="Quick test of r/entrepreneur (10 posts)"
               variant="secondary"
               requireAuth={false}
+              payload={{ subreddits: ["entrepreneur"], limit: 10 }}
             />
           </div>
         </div>

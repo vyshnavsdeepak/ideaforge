@@ -1,53 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { JobTriggersPanel } from '../../components/JobTriggersPanel';
 import { CostSummaryCard } from '../../components/CostAnalytics/CostSummaryCard';
 import { SessionCostTable } from '../../components/CostAnalytics/SessionCostTable';
+import { api } from '@/trpc/client';
 
-interface SystemHealth {
-  database: 'online' | 'offline' | 'degraded';
-  inngest: 'online' | 'offline' | 'degraded';
-  reddit: 'online' | 'offline' | 'degraded';
-  gemini: 'online' | 'offline' | 'degraded';
-  lastChecked: string;
-}
-
-interface JobMetrics {
-  totalJobs: number;
-  runningJobs: number;
-  completedJobs: number;
-  failedJobs: number;
-  averageProcessingTime: number;
-  successRate: number;
-}
-
-interface CurrentJob {
-  id: string;
-  type: string;
-  subreddit?: string;
-  status: 'running' | 'completed';
-  progress: number;
-  postsProcessed: number;
-  postsRequested: number;
-  startTime: string;
-  endTime?: string;
-  cost: number;
-}
-
-interface PostMetrics {
-  totalPosts: number;
-  processedPosts: number;
-  unprocessedPosts: number;
-  failedPosts: number;
-  recentOpportunities: number;
-}
-
-interface RecentActivity {
-  subreddit: string;
-  postsProcessed: number;
-  lastUpdate: string;
-}
 
 const healthColors = {
   online: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -62,63 +20,41 @@ const healthIcons = {
 };
 
 export function JobsPageContent() {
-  const [systemHealth, setSystemHealth] = useState<SystemHealth>({
-    database: 'online',
-    inngest: 'online',
-    reddit: 'online',
-    gemini: 'online',
-    lastChecked: new Date().toISOString(),
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  // Use tRPC query with automatic refetching
+  const { data: systemStatus, isLoading, isError } = api.system.getStatus.useQuery(undefined, {
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const [jobMetrics, setJobMetrics] = useState<JobMetrics>({
+  // Update last update time when data changes
+  React.useEffect(() => {
+    if (systemStatus) {
+      setLastUpdate(new Date());
+    }
+  }, [systemStatus]);
+
+  // Extract data from the query result
+  const systemHealth = systemStatus?.systemHealth ?? {
+    database: 'offline' as const,
+    inngest: 'offline' as const,
+    reddit: 'offline' as const,
+    gemini: 'offline' as const,
+    lastChecked: new Date().toISOString(),
+  };
+
+  const jobMetrics = systemStatus?.jobMetrics ?? {
     totalJobs: 0,
     runningJobs: 0,
     completedJobs: 0,
     failedJobs: 0,
     averageProcessingTime: 0,
-    successRate: 0,
-  });
+    successRate: '0',
+  };
 
-  const [currentJobs, setCurrentJobs] = useState<CurrentJob[]>([]);
-  const [postMetrics, setPostMetrics] = useState<PostMetrics | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-
-  useEffect(() => {
-    const fetchSystemStatus = async () => {
-      try {
-        setLoading(true);
-        
-        const response = await fetch('/api/admin/system-status');
-        if (!response.ok) {
-          throw new Error('Failed to fetch system status');
-        }
-        
-        const data = await response.json();
-        
-        setSystemHealth(data.systemHealth);
-        setJobMetrics({
-          ...data.jobMetrics,
-          successRate: parseFloat(data.jobMetrics.successRate)
-        });
-        setCurrentJobs(data.currentJobs || []);
-        setPostMetrics(data.postMetrics);
-        setRecentActivity(data.recentActivity || []);
-        setLastUpdate(new Date());
-      } catch (error) {
-        console.error('Failed to fetch system status:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSystemStatus();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchSystemStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const currentJobs = systemStatus?.currentJobs ?? [];
+  const postMetrics = systemStatus?.postMetrics ?? null;
+  const recentActivity = systemStatus?.recentActivity ?? [];
 
   const formatTime = (seconds: number) => {
     if (seconds < 60) return `${seconds}s`;
@@ -151,15 +87,26 @@ export function JobsPageContent() {
           </p>
         </div>
 
-        {/* Alert Placeholder */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
-          <div className="flex items-center gap-2">
-            <span className="text-blue-600 dark:text-blue-400">ℹ️</span>
-            <span className="text-sm text-blue-800 dark:text-blue-200">
-              System alerts and notifications will appear here
-            </span>
+        {/* Alert/Error Display */}
+        {isError ? (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
+            <div className="flex items-center gap-2">
+              <span className="text-red-600 dark:text-red-400">⚠️</span>
+              <span className="text-sm text-red-800 dark:text-red-200">
+                Failed to fetch system status. Please refresh the page or try again later.
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 dark:text-blue-400">ℹ️</span>
+              <span className="text-sm text-blue-800 dark:text-blue-200">
+                System status updates automatically every 30 seconds
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* System Health */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
@@ -264,7 +211,7 @@ export function JobsPageContent() {
               
               <div className="text-center">
                 <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                  {jobMetrics.successRate.toFixed(1)}%
+                  {parseFloat(jobMetrics.successRate).toFixed(1)}%
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Success Rate</div>
               </div>
@@ -287,7 +234,7 @@ export function JobsPageContent() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {loading ? (
+              {isLoading ? (
                 <div className="text-center py-8">
                   <div className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
