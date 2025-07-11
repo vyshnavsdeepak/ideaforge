@@ -22,6 +22,33 @@ interface JobMetrics {
   successRate: number;
 }
 
+interface CurrentJob {
+  id: string;
+  type: string;
+  subreddit?: string;
+  status: 'running' | 'completed';
+  progress: number;
+  postsProcessed: number;
+  postsRequested: number;
+  startTime: string;
+  endTime?: string;
+  cost: number;
+}
+
+interface PostMetrics {
+  totalPosts: number;
+  processedPosts: number;
+  unprocessedPosts: number;
+  failedPosts: number;
+  recentOpportunities: number;
+}
+
+interface RecentActivity {
+  subreddit: string;
+  postsProcessed: number;
+  lastUpdate: string;
+}
+
 const healthColors = {
   online: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   offline: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
@@ -52,36 +79,32 @@ export function JobsPageContent() {
     successRate: 0,
   });
 
-  const [, setLoading] = useState(true);
+  const [currentJobs, setCurrentJobs] = useState<CurrentJob[]>([]);
+  const [postMetrics, setPostMetrics] = useState<PostMetrics | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
-    // Simulate fetching system health and job metrics
     const fetchSystemStatus = async () => {
       try {
         setLoading(true);
         
-        // TODO: Replace with actual API calls
-        // Mock data for now
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const response = await fetch('/api/admin/system-status');
+        if (!response.ok) {
+          throw new Error('Failed to fetch system status');
+        }
         
-        setSystemHealth({
-          database: 'online',
-          inngest: 'online',
-          reddit: 'online',
-          gemini: 'online',
-          lastChecked: new Date().toISOString(),
-        });
-
+        const data = await response.json();
+        
+        setSystemHealth(data.systemHealth);
         setJobMetrics({
-          totalJobs: 1247,
-          runningJobs: 3,
-          completedJobs: 1189,
-          failedJobs: 55,
-          averageProcessingTime: 145,
-          successRate: 95.6,
+          ...data.jobMetrics,
+          successRate: parseFloat(data.jobMetrics.successRate)
         });
-
+        setCurrentJobs(data.currentJobs || []);
+        setPostMetrics(data.postMetrics);
+        setRecentActivity(data.recentActivity || []);
         setLastUpdate(new Date());
       } catch (error) {
         console.error('Failed to fetch system status:', error);
@@ -255,7 +278,7 @@ export function JobsPageContent() {
         {/* Manual Job Controls */}
         <JobTriggersPanel className="mb-8" />
 
-        {/* Current Jobs (Placeholder) */}
+        {/* Current Jobs */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
           <div className="p-6 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -264,47 +287,115 @@ export function JobsPageContent() {
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {/* Mock running job */}
-              <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      Scraping r/startups
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                    <span>Loading jobs...</span>
+                  </div>
+                </div>
+              ) : currentJobs.length > 0 ? (
+                currentJobs.map((job) => (
+                  <div 
+                    key={job.id}
+                    className={`flex items-center justify-between p-4 rounded-lg border ${
+                      job.status === 'running' 
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' 
+                        : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full ${
+                        job.status === 'running' 
+                          ? 'bg-blue-500 animate-pulse' 
+                          : 'bg-green-500'
+                      }`}></div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {job.type === 'batch' ? 'AI Analysis Batch' : `${job.type} Job`}
+                          {job.subreddit && ` - r/${job.subreddit}`}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {job.status === 'running' 
+                            ? `Started ${new Date(job.startTime).toLocaleTimeString()}`
+                            : job.endTime ? `Completed ${new Date(job.endTime).toLocaleTimeString()}` : 'Completed'
+                          }
+                          {job.postsProcessed > 0 && ` • ${job.postsProcessed}/${job.postsRequested} posts`}
+                          {job.cost > 0 && ` • $${job.cost.toFixed(4)}`}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Started 2 minutes ago
+                    <div className="flex items-center gap-3">
+                      {job.status === 'running' && job.postsRequested > 0 && (
+                        <>
+                          <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(100, job.progress)}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {Math.round(job.progress)}%
+                          </span>
+                        </>
+                      )}
+                      {job.status === 'completed' && (
+                        <span className="text-sm text-green-600 dark:text-green-400">✓ Done</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <p className="text-sm">No active jobs at the moment</p>
+                </div>
+              )}
+              
+              {/* Post Metrics Summary */}
+              {postMetrics && (
+                <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Post Processing Status</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-white">{postMetrics.totalPosts.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Total Posts</div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-green-600 dark:text-green-400">{postMetrics.processedPosts.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Processed</div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-yellow-600 dark:text-yellow-400">{postMetrics.unprocessedPosts.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Pending</div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-red-600 dark:text-red-400">{postMetrics.failedPosts}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Failed</div>
+                    </div>
+                    <div>
+                      <div className="font-medium text-blue-600 dark:text-blue-400">{postMetrics.recentOpportunities}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Opportunities (24h)</div>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div className="bg-blue-600 h-2 rounded-full w-3/4"></div>
-                  </div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">75%</span>
-                </div>
-              </div>
-
-              {/* Mock queued job */}
-              <div className="flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      AI Analysis Batch #1247
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Queued • 25 posts pending
-                    </div>
+              )}
+              
+              {/* Recent Subreddit Activity */}
+              {recentActivity.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Recent Subreddit Activity</h3>
+                  <div className="space-y-2">
+                    {recentActivity.map((activity, index) => (
+                      <div key={index} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">r/{activity.subreddit}</span>
+                        <span className="text-gray-500 dark:text-gray-500">
+                          {activity.postsProcessed} posts • Last: {new Date(activity.lastUpdate).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">Waiting</span>
-              </div>
-
-              {/* Empty state placeholder */}
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p className="text-sm">Real-time job monitoring will appear here</p>
-              </div>
+              )}
             </div>
           </div>
         </div>
