@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from './ui/Badge';
 import { Pagination } from './ui/Pagination';
@@ -91,12 +91,13 @@ interface PostsPageContentProps {
 
 export function PostsPageContent({ initialData }: PostsPageContentProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(!initialData);
   const [data, setData] = useState<PostsData | null>(initialData || null);
   const [analyzingComments, setAnalyzingComments] = useState<string | null>(null);
   
-  // Filter state - managed client-side
-  const [filters, setFilters] = useState({
+  // Filter state - derived from URL searchParams
+  const filters = useMemo(() => ({
     page: parseInt(searchParams.get('page') || '1'),
     limit: parseInt(searchParams.get('limit') || '20'),
     subreddit: searchParams.get('subreddit') || '',
@@ -105,11 +106,16 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
     sortBy: searchParams.get('sortBy') || 'createdAt',
     sortOrder: searchParams.get('sortOrder') || 'desc',
     author: searchParams.get('author') || '',
-  });
+  }), [searchParams]);
 
   // Debounced search to avoid too many API calls
   const [searchInput, setSearchInput] = useState(filters.search);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Update searchInput when URL search parameter changes
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
 
   // Fetch data from API
   const fetchData = useCallback(async (customFilters?: typeof filters) => {
@@ -146,25 +152,14 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
     }
   }, [initialData, fetchData]);
 
-  // Update URL without navigation when filters change
-  const updateURL = useCallback((newFilters: typeof filters) => {
-    const queryParams = new URLSearchParams();
-    
-    // Add non-empty filters to query params
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value && value !== '' && !(key === 'page' && value === 1)) {
-        queryParams.set(key, value.toString());
-      }
-    });
-    
-    const queryString = queryParams.toString();
-    const newPath = `/posts${queryString ? '?' + queryString : ''}`;
-    
-    // Update URL without navigation
-    window.history.replaceState({}, '', newPath);
-  }, []);
+  // Fetch data when URL parameters change
+  useEffect(() => {
+    if (initialData) {
+      fetchData();
+    }
+  }, [filters, fetchData, initialData]);
 
-  // Update filters and fetch data
+  // Update filters using router navigation
   const updateFilters = useCallback((newFilters: Partial<typeof filters>) => {
     const updatedFilters = {
       ...filters,
@@ -176,10 +171,20 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
       updatedFilters.page = 1;
     }
 
-    setFilters(updatedFilters);
-    updateURL(updatedFilters);
-    fetchData(updatedFilters);
-  }, [filters, updateURL, fetchData]);
+    // Create new URL with updated filters
+    const queryParams = new URLSearchParams();
+    Object.entries(updatedFilters).forEach(([key, value]) => {
+      if (value && value !== '' && !(key === 'page' && value === 1)) {
+        queryParams.set(key, value.toString());
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    const newPath = `/posts${queryString ? '?' + queryString : ''}`;
+    
+    // Navigate to new URL (this will trigger re-render with new data)
+    router.push(newPath);
+  }, [filters, router]);
 
   // Handle search input with debouncing
   const handleSearchChange = useCallback((value: string) => {
