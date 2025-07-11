@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { OpportunityCard } from './OpportunityCard';
 import { Pagination } from './ui/Pagination';
 import { 
@@ -95,12 +95,13 @@ interface OpportunitiesPageContentProps {
 
 export function OpportunitiesPageContent({ initialData }: OpportunitiesPageContentProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(!initialData);
   const [data, setData] = useState<OpportunitiesData | null>(initialData || null);
   const [showFilters, setShowFilters] = useState(false);
   
-  // Filter state - managed client-side
-  const [filters, setFilters] = useState({
+  // Filter state - derived from URL searchParams
+  const filters = useMemo(() => ({
     page: parseInt(searchParams.get('page') || '1'),
     limit: parseInt(searchParams.get('limit') || '20'),
     search: searchParams.get('search') || '',
@@ -114,11 +115,16 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
     viability: searchParams.get('viability') || 'all',
     sortBy: searchParams.get('sortBy') || 'overallScore',
     sortOrder: searchParams.get('sortOrder') || 'desc',
-  });
+  }), [searchParams]);
 
   // Debounced search to avoid too many API calls
   const [searchInput, setSearchInput] = useState(filters.search);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // Update searchInput when URL search parameter changes
+  useEffect(() => {
+    setSearchInput(filters.search);
+  }, [filters.search]);
 
   // Fetch data from API
   const fetchData = useCallback(async (customFilters?: typeof filters) => {
@@ -155,25 +161,16 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
     }
   }, [initialData, fetchData]);
 
-  // Update URL without navigation when filters change
-  const updateURL = useCallback((newFilters: typeof filters) => {
-    const queryParams = new URLSearchParams();
-    
-    // Add non-empty filters to query params
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1) && !(key === 'minScore' && value === 0)) {
-        queryParams.set(key, value.toString());
-      }
-    });
-    
-    const queryString = queryParams.toString();
-    const newPath = `/opportunities${queryString ? '?' + queryString : ''}`;
-    
-    // Update URL without navigation
-    window.history.replaceState({}, '', newPath);
-  }, []);
+  // Fetch data when URL parameters change
+  useEffect(() => {
+    if (initialData) {
+      // If we have initial data, fetch new data when URL changes
+      fetchData();
+    }
+  }, [filters, fetchData, initialData]);
 
-  // Update filters and fetch data
+
+  // Update filters using router navigation
   const updateFilters = useCallback((newFilters: Partial<typeof filters>) => {
     const updatedFilters = {
       ...filters,
@@ -185,10 +182,20 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
       updatedFilters.page = 1;
     }
 
-    setFilters(updatedFilters);
-    updateURL(updatedFilters);
-    fetchData(updatedFilters);
-  }, [filters, updateURL, fetchData]);
+    // Create new URL with updated filters
+    const queryParams = new URLSearchParams();
+    Object.entries(updatedFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1) && !(key === 'minScore' && value === 0)) {
+        queryParams.set(key, value.toString());
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    const newPath = `/opportunities${queryString ? '?' + queryString : ''}`;
+    
+    // Navigate to new URL (this will trigger re-render with new data)
+    router.push(newPath);
+  }, [filters, router]);
 
   // Handle search input with debouncing
   const handleSearchChange = useCallback((value: string) => {
