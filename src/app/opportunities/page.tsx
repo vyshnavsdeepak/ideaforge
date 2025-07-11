@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { OpportunitiesPageSSR } from '../../components/OpportunitiesPageSSR';
+import { OpportunitiesPageContent } from '../../components/OpportunitiesPageContent';
 import { createServerCaller } from '@/trpc/server';
 
 export const metadata: Metadata = {
@@ -50,5 +50,5 @@ export default async function OpportunitiesPage({ searchParams }: PageProps) {
   const caller = await createServerCaller();
   const data = await caller.opportunities.list(filters);
 
-  return <OpportunitiesPageSSR data={data} searchParams={params} />;
+  return <OpportunitiesPageContent initialData={data} />;
 }

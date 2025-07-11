@@ -8,10 +8,16 @@ import type { NextRequest } from 'next/server';
  * This bypasses the HTTP layer and calls procedures directly
  */
 export const createServerCaller = async () => {
-  const headersList = headers();
+  const headersList = await headers();
+  
+  // Convert ReadonlyHeaders to Headers for compatibility
+  const headersObj = new Headers();
+  headersList.forEach((value, key) => {
+    headersObj.set(key, value);
+  });
   
   const ctx = await createInnerTRPCContext({
-    headers: headersList,
+    headers: headersObj,
     req: {} as NextRequest, // TODO: Properly type this when needed
   });
   
