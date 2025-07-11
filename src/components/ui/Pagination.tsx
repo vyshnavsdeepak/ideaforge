@@ -58,19 +58,19 @@ export function Pagination({
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalCount);
 
-  const baseButtonClass = "inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2";
+  const baseButtonClass = "inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium border rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2";
   const enabledButtonClass = "text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700";
   const disabledButtonClass = "text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 cursor-not-allowed";
 
   return (
-    <div className={`flex items-center justify-between ${className}`}>
+    <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${className}`}>
       {showInfo && (
-        <div className="text-sm text-gray-700 dark:text-gray-300">
+        <div className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
           Showing {startItem} to {endItem} of {totalCount.toLocaleString()} results
         </div>
       )}
       
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-1 sm:gap-2 flex-wrap">
         {/* Previous Button */}
         {currentPage > 1 ? (
           <Link
@@ -79,12 +79,12 @@ export function Pagination({
             scroll={false} // Prevent default scroll, we handle it manually
           >
             <ChevronLeft className="w-4 h-4" />
-            Previous
+            <span className="hidden sm:inline">Previous</span>
           </Link>
         ) : (
           <span className={`${baseButtonClass} ${disabledButtonClass}`}>
             <ChevronLeft className="w-4 h-4" />
-            Previous
+            <span className="hidden sm:inline">Previous</span>
           </span>
         )}
         
@@ -152,12 +152,12 @@ export function Pagination({
             className={`${baseButtonClass} ${enabledButtonClass}`}
             scroll={false}
           >
-            Next
+            <span className="hidden sm:inline">Next</span>
             <ChevronRight className="w-4 h-4" />
           </Link>
         ) : (
           <span className={`${baseButtonClass} ${disabledButtonClass}`}>
-            Next
+            <span className="hidden sm:inline">Next</span>
             <ChevronRight className="w-4 h-4" />
           </span>
         )}

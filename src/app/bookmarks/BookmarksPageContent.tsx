@@ -176,7 +176,7 @@ export function BookmarksPageContent() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Left Sidebar - Collections */}
           <div className="lg:col-span-1">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -194,9 +194,9 @@ export function BookmarksPageContent() {
             {selectedCollection ? (
               <div className="space-y-6">
                 {/* Collection Header */}
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                    <div className="flex items-center space-x-3 sm:space-x-4">
                       <div
                         className="w-12 h-12 rounded-lg flex items-center justify-center text-white font-medium"
                         style={{ backgroundColor: selectedCollection.color }}
@@ -255,11 +255,11 @@ export function BookmarksPageContent() {
                       />
                     </div>
                     
-                    <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as 'created' | 'score' | 'rating' | 'title')}
-                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-sm"
+                        className="px-2 sm:px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white text-xs sm:text-sm"
                       >
                         <option value="created">Sort by Date</option>
                         <option value="score">Sort by Score</option>
@@ -269,7 +269,7 @@ export function BookmarksPageContent() {
                       
                       <button
                         onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                        className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 self-start"
                       >
                         {sortOrder === 'asc' ? <SortAsc className="w-4 h-4" /> : <SortDesc className="w-4 h-4" />}
                       </button>
@@ -293,7 +293,7 @@ export function BookmarksPageContent() {
                   </div>
                 ) : (
                   <div className={viewMode === 'grid' 
-                    ? 'grid grid-cols-1 md:grid-cols-2 gap-6' 
+                    ? 'grid grid-cols-1 gap-4 sm:gap-6' 
                     : 'space-y-4'
                   }>
                     {sortedBookmarks.map((bookmark) => (
@@ -335,7 +335,7 @@ export function BookmarksPageContent() {
                           {/* Bookmark metadata */}
                           <div className="space-y-2">
                             {bookmark.rating && (
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-2 mt-4 sm:mt-0">
                                 <span className="text-sm text-gray-500 dark:text-gray-400">Rating:</span>
                                 {renderStars(bookmark.rating)}
                               </div>

@@ -308,15 +308,15 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
                 <MessageSquare className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="ml-4">
-                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Posts</h3>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                <h3 className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">Total Posts</h3>
+                <p className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-white">
                   {data.stats.total.toLocaleString()}
                 </p>
               </div>
@@ -368,8 +368,8 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
 
         {/* Filters */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8">
-          <div className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4">
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4">
               {/* Search */}
               <div className="flex-1">
                 <div className="relative">
@@ -385,11 +385,11 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
               </div>
 
               {/* Filters */}
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
                 <select
                   value={filters.subreddit}
                   onChange={(e) => updateFilters({ subreddit: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">All Subreddits</option>
                   {data.subreddits.map(sub => (
@@ -402,7 +402,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 <select
                   value={filters.status}
                   onChange={(e) => updateFilters({ status: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="">All Status</option>
                   <option value="processed">Processed</option>
@@ -415,7 +415,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 <select
                   value={filters.sortBy}
                   onChange={(e) => updateFilters({ sortBy: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="createdAt">Created Date</option>
                   <option value="createdUtc">Reddit Date</option>
@@ -426,7 +426,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                 <select
                   value={filters.sortOrder}
                   onChange={(e) => updateFilters({ sortOrder: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-2 sm:px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 >
                   <option value="desc">Newest First</option>
                   <option value="asc">Oldest First</option>
@@ -454,10 +454,10 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
               
               return (
                 <div key={post.id} className="bg-white dark:bg-gray-800 rounded-lg shadow">
-                  <div className="p-6">
-                    <div className="flex items-start justify-between">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between space-y-4 sm:space-y-0">
                       <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           <Badge variant="outline">r/{post.subreddit}</Badge>
                           <span className="text-sm text-gray-500 dark:text-gray-400">
                             <User className="w-4 h-4 inline mr-1" />
@@ -484,7 +484,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                           </p>
                         )}
 
-                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                           <span className="flex items-center">
                             <ArrowBigUp className="w-4 h-4 mr-1" />
                             {post.score}
@@ -507,7 +507,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                         </div>
                       </div>
 
-                      <div className="flex flex-col space-y-2 ml-4">
+                      <div className="flex flex-col sm:flex-row sm:items-start space-y-2 sm:space-y-0 sm:space-x-2 sm:ml-4">
                         {/* Processing Status */}
                         {post.isOpportunity === true && (
                           <Badge variant="success">Opportunity</Badge>
@@ -523,7 +523,7 @@ export function PostsPageContent({ initialData }: PostsPageContentProps) {
                         <button
                           onClick={() => handleAnalyzeComments(post.id, post.permalink || '')}
                           disabled={analysisStatus.disabled || analyzingComments === post.id}
-                          className={`px-3 py-1 rounded-md text-sm font-medium flex items-center space-x-2 ${analysisStatus.className}`}
+                          className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 ${analysisStatus.className}`}
                         >
                           {analyzingComments === post.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />

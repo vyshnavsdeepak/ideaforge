@@ -276,37 +276,37 @@ export function OpportunitiesPageContent({ initialData }: OpportunitiesPageConte
 
       <div className="container mx-auto px-4 py-8 max-w-7xl relative z-10">
         {/* Header Section with Glassmorphism */}
-        <div className="mb-8 backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-8 shadow-xl border border-white/20 dark:border-gray-700/20">
-          <div className="flex items-center justify-between mb-6">
+        <div className="mb-8 backdrop-blur-xl bg-white/60 dark:bg-gray-800/60 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-xl border border-white/20 dark:border-gray-700/20">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent flex items-center gap-3">
-                <Sparkles className="w-10 h-10 text-purple-600 dark:text-purple-400 animate-pulse" />
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent flex items-center gap-2 sm:gap-3">
+                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-purple-600 dark:text-purple-400 animate-pulse" />
                 AI Opportunities
               </h1>
-              <p className="text-gray-600 dark:text-gray-300 mt-2">
+              <p className="text-gray-600 dark:text-gray-300 mt-2 text-sm sm:text-base">
                 Discover and explore AI-powered business opportunities from Reddit communities
               </p>
             </div>
             
-            <div className="flex items-center gap-4">
-              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-4 py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:flex lg:items-center">
+              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-2 sm:px-4 py-2 sm:py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
+                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                   {activeFiltersCount > 0 ? 'Filtered' : 'Total Found'}
                 </div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <div className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-1 sm:gap-2">
                   {data.pagination.totalCount}
-                  <TrendingUp className="w-5 h-5 text-green-500" />
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
                 </div>
               </div>
-              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-4 py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Viable (4+ Score)</div>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-2 sm:px-4 py-2 sm:py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
+                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Viable (4+ Score)</div>
+                <div className="text-lg sm:text-2xl font-bold text-green-600 dark:text-green-400">
                   {data.stats.viable}
                 </div>
               </div>
-              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-4 py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Avg Score</div>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <div className="backdrop-blur-sm bg-white/50 dark:bg-gray-700/50 px-2 sm:px-4 py-2 sm:py-3 rounded-xl border border-white/20 dark:border-gray-600/20">
+                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Avg Score</div>
+                <div className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {data.stats.avgScore.toFixed(1)}
                 </div>
               </div>
