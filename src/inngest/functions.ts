@@ -1147,6 +1147,11 @@ export const batchAnalyzeOpportunitiesFunction = inngest.createFunction(
                 paymentWillingness: result.analysis.opportunity.marketValidation.paymentWillingness,
                 competitiveAnalysis: result.analysis.opportunity.marketValidation.competitiveAnalysis,
                 validationTier: result.analysis.opportunity.marketValidation.validationTier,
+                
+                // Makeshift vs Software Solution Analysis
+                makeshiftSolution: result.analysis.opportunity.makeshiftSolution || null,
+                softwareSolution: result.analysis.opportunity.softwareSolution || null,
+                deltaComparison: result.analysis.opportunity.deltaComparison || null,
               }
             });
 
@@ -1617,6 +1622,9 @@ export const analyzeRedditComments = inngest.createFunction(
         successProbability?: string;
         categories?: Record<string, string>;
         marketValidation?: Record<string, string | number>;
+        makeshiftSolution?: unknown;
+        softwareSolution?: unknown;
+        deltaComparison?: unknown;
       };
       confidence: number;
     }
@@ -1692,7 +1700,12 @@ export const analyzeRedditComments = inngest.createFunction(
             // Optional categories with defaults
             businessType: typedResult.opportunity.categories?.businessType || 'unknown',
             industryVertical: typedResult.opportunity.categories?.industryVertical || 'unknown',
-            niche: typedResult.opportunity.categories?.niche || 'general'
+            niche: typedResult.opportunity.categories?.niche || 'general',
+            
+            // Makeshift vs Software Solution Analysis
+            makeshiftSolution: typedResult.opportunity.makeshiftSolution || null,
+            softwareSolution: typedResult.opportunity.softwareSolution || null,
+            deltaComparison: typedResult.opportunity.deltaComparison || null,
           };
 
           // Store the opportunity
