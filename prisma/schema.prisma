@@ -209,6 +209,11 @@ model Opportunity {
   competitiveAnalysis  String?  @default("Unknown")      // No Competition, Low Competition, Medium Competition, High Competition
   validationTier       String?  @default("Unknown")      // Tier 1 (Build Now), Tier 2 (Validate Further), Tier 3 (Monitor)
   
+  // Makeshift vs Software Solution Analysis
+  makeshiftSolution    Json?                             // Makeshift solution data
+  softwareSolution     Json?                             // Software solution data
+  deltaComparison      Json?                             // Delta comparison data
+  
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   

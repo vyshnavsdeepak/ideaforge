@@ -434,6 +434,10 @@ export const analyzeOpportunity = inngest.createFunction(
               ...(analysis.confidence > 0.95 ? {
                 overallScore: opp.overallScore,
                 viabilityThreshold: opp.viabilityThreshold,
+                // Update makeshift vs software analysis if available
+                makeshiftSolution: opp.makeshiftSolution ? opp.makeshiftSolution as Prisma.JsonObject : Prisma.JsonNull,
+                softwareSolution: opp.softwareSolution ? opp.softwareSolution as Prisma.JsonObject : Prisma.JsonNull,
+                deltaComparison: opp.deltaComparison ? opp.deltaComparison as Prisma.JsonObject : Prisma.JsonNull,
               } : {})
             }
           });
@@ -508,6 +512,11 @@ export const analyzeOpportunity = inngest.createFunction(
             paymentWillingness: opp.marketValidation.paymentWillingness,
             competitiveAnalysis: opp.marketValidation.competitiveAnalysis,
             validationTier: opp.marketValidation.validationTier,
+            
+            // Makeshift vs Software Solution Analysis
+            makeshiftSolution: opp.makeshiftSolution ? opp.makeshiftSolution as Prisma.JsonObject : Prisma.JsonNull,
+            softwareSolution: opp.softwareSolution ? opp.softwareSolution as Prisma.JsonObject : Prisma.JsonNull,
+            deltaComparison: opp.deltaComparison ? opp.deltaComparison as Prisma.JsonObject : Prisma.JsonNull,
             
             // Create initial source link
             redditPosts: {

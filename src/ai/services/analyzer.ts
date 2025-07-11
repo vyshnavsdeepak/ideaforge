@@ -57,6 +57,36 @@ export interface MarketValidation {
   validationTier: 'Tier 1 (Build Now)' | 'Tier 2 (Validate Further)' | 'Tier 3 (Monitor)' | 'Unknown';
 }
 
+export interface MakeshiftSolution {
+  description: string;
+  currentApproach: string;
+  painPoints: string[];
+  timeInvestment: string;
+  costEstimate: string;
+  skillsRequired: string[];
+  frustrationLevel: 'Low' | 'Medium' | 'High';
+  scalabilityIssues: string[];
+}
+
+export interface SoftwareSolution {
+  description: string;
+  proposedApproach: string;
+  keyFeatures: string[];
+  automationLevel: 'Partial' | 'High' | 'Full';
+  userExperience: string;
+  integrationCapabilities: string[];
+  maintenanceRequirements: string;
+}
+
+export interface DeltaComparison {
+  makeshiftDelta4: Delta4Score;
+  softwareDelta4: Delta4Score;
+  improvementDelta: Delta4Score;
+  totalDeltaScore: number;
+  biggestImprovements: string[];
+  reasonsForSoftware: string[];
+}
+
 export interface OpportunityAnalysis {
   title: string;
   description: string;
@@ -84,6 +114,9 @@ export interface OpportunityAnalysis {
     legalFriction: string;
     emotionalComfort: string;
   };
+  makeshiftSolution?: MakeshiftSolution;
+  softwareSolution?: SoftwareSolution;
+  deltaComparison?: DeltaComparison;
 }
 
 export interface AIAnalysisRequest {
@@ -103,6 +136,69 @@ export interface AIAnalysisResponse {
 }
 
 // Define the structured output schema
+const makeshiftSolutionSchema = z.object({
+  description: z.string(),
+  currentApproach: z.string(),
+  painPoints: z.array(z.string()),
+  timeInvestment: z.string(),
+  costEstimate: z.string(),
+  skillsRequired: z.array(z.string()),
+  frustrationLevel: z.enum(['Low', 'Medium', 'High']),
+  scalabilityIssues: z.array(z.string()),
+});
+
+const softwareSolutionSchema = z.object({
+  description: z.string(),
+  proposedApproach: z.string(),
+  keyFeatures: z.array(z.string()),
+  automationLevel: z.enum(['Partial', 'High', 'Full']),
+  userExperience: z.string(),
+  integrationCapabilities: z.array(z.string()),
+  maintenanceRequirements: z.string(),
+});
+
+const deltaComparisonSchema = z.object({
+  makeshiftDelta4: z.object({
+    speed: z.number().min(0).max(10),
+    convenience: z.number().min(0).max(10),
+    trust: z.number().min(0).max(10),
+    price: z.number().min(0).max(10),
+    status: z.number().min(0).max(10),
+    predictability: z.number().min(0).max(10),
+    uiUx: z.number().min(0).max(10),
+    easeOfUse: z.number().min(0).max(10),
+    legalFriction: z.number().min(0).max(10),
+    emotionalComfort: z.number().min(0).max(10),
+  }),
+  softwareDelta4: z.object({
+    speed: z.number().min(0).max(10),
+    convenience: z.number().min(0).max(10),
+    trust: z.number().min(0).max(10),
+    price: z.number().min(0).max(10),
+    status: z.number().min(0).max(10),
+    predictability: z.number().min(0).max(10),
+    uiUx: z.number().min(0).max(10),
+    easeOfUse: z.number().min(0).max(10),
+    legalFriction: z.number().min(0).max(10),
+    emotionalComfort: z.number().min(0).max(10),
+  }),
+  improvementDelta: z.object({
+    speed: z.number().min(0).max(10),
+    convenience: z.number().min(0).max(10),
+    trust: z.number().min(0).max(10),
+    price: z.number().min(0).max(10),
+    status: z.number().min(0).max(10),
+    predictability: z.number().min(0).max(10),
+    uiUx: z.number().min(0).max(10),
+    easeOfUse: z.number().min(0).max(10),
+    legalFriction: z.number().min(0).max(10),
+    emotionalComfort: z.number().min(0).max(10),
+  }),
+  totalDeltaScore: z.number(),
+  biggestImprovements: z.array(z.string()),
+  reasonsForSoftware: z.array(z.string()),
+});
+
 export const opportunitySchema = z.object({
   isOpportunity: z.boolean(),
   confidence: z.number().min(0).max(1),
@@ -178,6 +274,9 @@ export const opportunitySchema = z.object({
       legalFriction: z.string(),
       emotionalComfort: z.string(),
     }),
+    makeshiftSolution: makeshiftSolutionSchema.optional(),
+    softwareSolution: softwareSolutionSchema.optional(),
+    deltaComparison: deltaComparisonSchema.optional(),
   }).optional(),
   reasons: z.array(z.string()).optional(),
 });
@@ -348,11 +447,47 @@ ${this.getSubredditSpecificPrompt(request.subreddit)}
 Follow the same step-by-step approach for this Reddit post:
 
 **Step 1:** Identify the core problem mentioned in the post
-**Step 2:** Suggest a potential AI-driven solution
-**Step 3:** Evaluate the solution using Delta 4 theory (provide detailed reasoning for each dimension)
-**Step 4:** Analyze market validation using the provided criteria
-**Step 5:** Categorize the business opportunity across all dimensions
-**Step 6:** Assess overall viability and provide comprehensive analysis
+**Step 2:** Analyze the current makeshift solution (what users currently do)
+**Step 3:** Design the ideal software solution (what a developer would build)
+**Step 4:** Compare makeshift vs software using Delta 4 theory
+**Step 5:** Evaluate the solution using Delta 4 theory (provide detailed reasoning for each dimension)
+**Step 6:** Analyze market validation using the provided criteria
+**Step 7:** Categorize the business opportunity across all dimensions
+**Step 8:** Assess overall viability and provide comprehensive analysis
+
+**IMPORTANT: Makeshift vs Software Analysis**
+For every opportunity, analyze both the current makeshift solution and the ideal software solution:
+
+**Makeshift Solution Analysis:**
+- What do users currently do to solve this problem?
+- What manual steps, workarounds, or hacks are they using?
+- How much time does it take them daily/weekly?
+- What skills do they need to learn?
+- What are the pain points and frustrations?
+- How does it scale (or not scale)?
+- What does it cost them in time/money?
+
+**Software Solution Analysis:**
+- What would the ideal software solution look like?
+- What key features would it have?
+- How would it automate the current manual process?
+- What would the user experience be?
+- How would it integrate with existing tools?
+- What level of automation would it provide?
+
+**Delta Comparison:**
+- Score the makeshift solution (0-10) on each Delta 4 dimension
+- Score the software solution (0-10) on each Delta 4 dimension  
+- Calculate the improvement delta (software - makeshift)
+- Identify the biggest improvements software would provide
+- Explain why software is worth building vs keeping makeshift solution
+
+**Example Delta Comparison:**
+Makeshift: Manual Excel tracking (Speed: 2, Convenience: 3, Trust: 6)
+Software: Automated dashboard (Speed: 9, Convenience: 9, Trust: 8)
+Improvement: +7 Speed, +6 Convenience, +2 Trust
+Total Delta Score: 15 (sum of improvements)
+Biggest Improvements: ["7x faster data processing", "6x easier to use", "2x more reliable"]
 
 **Software/Tech Requirements:**
 - Must be solvable with SOFTWARE (SaaS, web app, mobile app, API, platform)
@@ -410,6 +545,9 @@ If this is a viable opportunity, provide the complete analysis with full categor
         legalFriction: string;
         emotionalComfort: string;
       };
+      makeshiftSolution?: MakeshiftSolution;
+      softwareSolution?: SoftwareSolution;
+      deltaComparison?: DeltaComparison;
       [key: string]: unknown;
     };
   }): AIAnalysisResponse {
@@ -443,6 +581,9 @@ If this is a viable opportunity, provide the complete analysis with full categor
         categories: opportunity.categories,
         marketValidation: opportunity.marketValidation,
         reasoning: opportunity.reasoning,
+        makeshiftSolution: opportunity.makeshiftSolution,
+        softwareSolution: opportunity.softwareSolution,
+        deltaComparison: opportunity.deltaComparison,
       },
     };
   }
@@ -467,6 +608,28 @@ If this is a viable opportunity, provide the complete analysis with full categor
     });
 
     return Math.round(weightedSum * 100) / 100;
+  }
+
+  private calculateDeltaScore(makeshiftScores: Delta4Score, softwareScores: Delta4Score): number {
+    const improvementDelta: Delta4Score = {
+      speed: softwareScores.speed - makeshiftScores.speed,
+      convenience: softwareScores.convenience - makeshiftScores.convenience,
+      trust: softwareScores.trust - makeshiftScores.trust,
+      price: softwareScores.price - makeshiftScores.price,
+      status: softwareScores.status - makeshiftScores.status,
+      predictability: softwareScores.predictability - makeshiftScores.predictability,
+      uiUx: softwareScores.uiUx - makeshiftScores.uiUx,
+      easeOfUse: softwareScores.easeOfUse - makeshiftScores.easeOfUse,
+      legalFriction: softwareScores.legalFriction - makeshiftScores.legalFriction,
+      emotionalComfort: softwareScores.emotionalComfort - makeshiftScores.emotionalComfort,
+    };
+
+    // Sum all positive improvements
+    const totalImprovement = Object.values(improvementDelta)
+      .filter(delta => delta > 0)
+      .reduce((sum, delta) => sum + delta, 0);
+
+    return Math.round(totalImprovement * 100) / 100;
   }
 
   private getSubredditSpecificPrompt(subreddit: string): string {
